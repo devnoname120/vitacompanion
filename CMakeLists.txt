@@ -28,10 +28,10 @@ add_executable(vitacompanion
   main.h
   log.c
   log.h
-  cmd_handler.c
-  cmd_handler.h
-  net_handler.c
-  net_handler.h
+        cmd.c
+        cmd.h
+        net.c
+        net.h
 )
 
 

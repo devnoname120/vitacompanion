@@ -1,6 +1,6 @@
 #include <psp2/kernel/modulemgr.h>
 #include <vitasdk.h>
-#include "cmd_handler.h"
+#include "cmd.h"
 
 #define LOADER_PORT 1338
 

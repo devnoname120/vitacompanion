@@ -2,8 +2,8 @@
 #include <vitasdk.h>
 
 #include "log.h"
-#include "cmd_handler.h"
-#include "net_handler.h"
+#include "cmd.h"
+#include "net.h"
 
 extern int run;
 

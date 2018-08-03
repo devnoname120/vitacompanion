@@ -13,8 +13,8 @@
 #include <taipool.h>
 
 #include "main.h"
-#include "net_handler.h"
-#include "cmd_handler.h"
+#include "net.h"
+#include "cmd.h"
 
 extern SceUID net_thid;
 extern int net_connected;
