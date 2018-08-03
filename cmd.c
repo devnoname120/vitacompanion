@@ -9,6 +9,34 @@ extern int run;
 static SceUID loader_thid;
 static int loader_sockfd;
 
+int cmd_handle(char *cmd, unsigned int size, char *res_msg) {
+	if(!strcmp(cmd, "destroy\n")) {
+		sceAppMgrDestroyOtherApp();
+
+		char *msg = "Apps destroyed.\n";
+		strncpy(res_msg, msg, strlen(msg));
+	} else if(!strncmp(cmd, "launch ", strlen("launch "))) {
+		char uri[32];
+
+		// FIXME Dirty fix for trailing '\n'
+		cmd[7 + 9] = '\0';
+		snprintf(uri, 32, "psgm:play?titleid=%s", cmd + 7);
+
+		for (int i = 0; i < 40; i++) {
+			if (sceAppMgrLaunchAppByUri(0xFFFFF, uri) != 0) {
+				break;
+			}
+			sceKernelDelayThread(10000);
+		}
+
+		char *msg = "Launched.\n";
+		strncpy(res_msg, msg, strlen(msg));
+	} else {
+		char *msg = "Unknown command\n";
+		strncpy(res_msg, msg, strlen(msg));
+	}
+}
+
 int cmd_thread(unsigned int args, void *argp)
 {
 	struct SceNetSockaddrIn loaderaddr;
@@ -34,11 +62,15 @@ int cmd_thread(unsigned int args, void *argp)
 		client_sockfd = sceNetAccept(loader_sockfd, (struct SceNetSockaddr *)&clientaddr, &addrlen);
 		if (client_sockfd >= 0) {
 		    char cmd[100] = {0};
-            int res = sceNetRecv(client_sockfd, cmd, sizeof(cmd), 0);
+            int size = sceNetRecv(client_sockfd, cmd, sizeof(cmd), 0);
 
-            sceNetSend(client_sockfd, cmd, strlen(cmd), 0);
+            char res_msg[30] = "\n";
+
+            if (size >= 0)
+				cmd_handle(cmd, (unsigned int)size, res_msg);
+
+            sceNetSend(client_sockfd, res_msg, strlen(res_msg), 0);
             sceNetSocketClose(client_sockfd);
-			sceAppMgrDestroyOtherApp();
 		} else {
 			break;
 		}
