@@ -2,7 +2,7 @@
 #include <vitasdk.h>
 #include "cmd.h"
 
-#define LOADER_PORT 1338
+#define CMD_PORT 1338
 
 extern int run;
 
@@ -48,7 +48,7 @@ int cmd_thread(unsigned int args, void *argp)
 
 	loaderaddr.sin_family = SCE_NET_AF_INET;
 	loaderaddr.sin_addr.s_addr = sceNetHtonl(SCE_NET_INADDR_ANY);
-	loaderaddr.sin_port = sceNetHtons(LOADER_PORT);
+	loaderaddr.sin_port = sceNetHtons(CMD_PORT);
 
 	sceNetBind(loader_sockfd, (struct SceNetSockaddr *)&loaderaddr, sizeof(loaderaddr));
 
