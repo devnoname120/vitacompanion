@@ -150,14 +150,9 @@ static void *netctl_cb(int event_type, void *arg)
 
 static int net_thread(SceSize args, void *argp)
 {
-	int ret, state;
+	int ret;
 
 	sceKernelDelayThread(3 * 1000 * 1000);
-
-	/*ret = sceSysmoduleLoadModule(SCE_SYSMODULE_NET);
-	LOG("sceSysmoduleLoadModule: 0x%08X\n", ret);
-
-	sceKernelDelayThread(1 * 1000 * 1000);*/
 
 	ret = sceNetCtlInit();
 	LOG("sceNetCtlInit: 0x%08X\n", ret);
