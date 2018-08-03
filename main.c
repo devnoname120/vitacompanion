@@ -6,98 +6,25 @@
 #include <psp2/io/stat.h>
 #include <psp2/net/netctl.h>
 #include <taihen.h>
-#include <ftpvita.h>
+
 #include <string.h>
 #include <stdarg.h>
 #define TAIPOOL_AS_STDLIB
 #include <taipool.h>
 
+#include "main.h"
+#include "net_handler.h"
 #include "cmd_handler.h"
 
-#define ENABLE_LOGGING 0
-
-static void LOG(const char *str, ...)
-{
-#if ENABLE_LOGGING == 1
-	static SceUID logfd = -1;
-	if (logfd == -1) {
-		logfd = sceIoOpen("ux0:dump/vitacompanion.txt", SCE_O_APPEND |
-			SCE_O_CREAT | SCE_O_WRONLY, 0666);
-	}
-	char buff[256];
-	va_list arglist;
-	va_start(arglist, str);
-	int len = vsnprintf(buff, sizeof(buff), str, arglist);
-	va_end(arglist);
-	sceIoWrite(logfd, buff, len);
-#endif
-}
-
-static SceUID net_thid;
-static int net_connected;
-static int netctl_cb_id;
+extern SceUID net_thid;
+extern int net_connected;
 int run;
 
 
-static void do_net_connected()
-{
-	char vita_ip[16];
-	unsigned short int vita_port;
-
-	LOG("do_net_connected\n");
-
-#if ENABLE_LOGGING == 1
-	ftpvita_set_info_log_cb(LOG);
-	ftpvita_set_debug_log_cb(LOG);
-#endif
-
-	ftpvita_set_file_buf_size(512 * 1024);
-
-	if (ftpvita_init(vita_ip, &vita_port) >= 0) {
-		ftpvita_add_device("ux0:");
-		ftpvita_add_device("ur0:");
-
-		loader_start();
-		net_connected = 1;
-	}
-}
-
-static void *netctl_cb(int event_type, void *arg)
-{
-	LOG("netctl cb: %d\n", event_type);
-
-	if ((event_type == 1 || event_type == 2) && net_connected == 1) {
-		ftpvita_fini();
-		loader_end();
-		net_connected = 0;
-	} else if (event_type == 3 && !net_connected) { /* IP obtained */
-		do_net_connected();
-	}
-
-	return NULL;
-}
-
-static int net_thread(SceSize args, void *argp)
-{
-	int ret;
-
-	sceKernelDelayThread(3 * 1000 * 1000);
-
-	ret = sceNetCtlInit();
-	LOG("sceNetCtlInit: 0x%08X\n", ret);
-
-	ret = sceNetCtlInetRegisterCallback(netctl_cb, NULL, &netctl_cb_id);
-	LOG("sceNetCtlInetRegisterCallback: 0x%08X\n", ret);
-
-	while (run) {
-		sceNetCtlCheckCallback();
-		sceKernelDelayThread(1000 * 1000);
-	}
-
-	return 0;
-}
-
 void __unused _start() __attribute__ ((weak, alias ("module_start")));
+
+void net_start();
+
 int __unused module_start(SceSize argc, const void *args)
 {
 	taipool_init(1 * 1024 * 1024);
@@ -108,25 +35,21 @@ int __unused module_start(SceSize argc, const void *args)
 	sceIoClose(fd);
 #endif
 
-	net_thid = sceKernelCreateThread("vitacompanion_net_thread",
-		net_thread, 0x40, 0x10000, 0, 0, NULL);
-
-	run = 1;
-	sceKernelStartThread(net_thid, 0, NULL);
+	net_start();
 
 	return SCE_KERNEL_START_SUCCESS;
 }
+
 
 int __unused module_stop(SceSize argc, const void *args)
 {
 	run = 0;
 	sceKernelWaitThreadEnd(net_thid, NULL, NULL);
 
-	sceNetCtlInetUnregisterCallback(netctl_cb_id);
 
 	if (net_connected) {
-		ftpvita_fini();
-		loader_end();
+	    net_end();
+        cmd_end();
 	}
 
 	taipool_term();

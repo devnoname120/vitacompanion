@@ -25,7 +25,13 @@ link_directories(
 
 add_executable(vitacompanion
   main.c
+  main.h
+  log.c
+  log.h
   cmd_handler.c
+  cmd_handler.h
+  net_handler.c
+  net_handler.h
 )
 
 

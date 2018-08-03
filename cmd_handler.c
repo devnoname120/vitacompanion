@@ -9,11 +9,11 @@ extern int run;
 static SceUID loader_thid;
 static int loader_sockfd;
 
-int loader_thread(unsigned int args, void *argp)
+int cmd_thread(unsigned int args, void *argp)
 {
 	struct SceNetSockaddrIn loaderaddr;
 
-	loader_sockfd = sceNetSocket("vitacompanion_loader_sock",
+	loader_sockfd = sceNetSocket("vitacompanion_cmd_sock",
 		SCE_NET_AF_INET,
 		SCE_NET_SOCK_STREAM,
 		0);
@@ -48,16 +48,16 @@ int loader_thread(unsigned int args, void *argp)
 	return 0;
 }
 
-void loader_start()
+void cmd_start()
 {
-	loader_thid = sceKernelCreateThread("vitacompanion_loader_thread",
-		loader_thread, 0x40, 0x10000, 0, 0, NULL);
+	loader_thid = sceKernelCreateThread("vitacompanion_cmd_thread",
+                                        cmd_thread, 0x40, 0x10000, 0, 0, NULL);
 
 	run = 1;
 	sceKernelStartThread(loader_thid, 0, NULL);
 }
 
-void loader_end()
+void cmd_end()
 {
 	run = 0;
 	sceNetSocketClose(loader_sockfd);
