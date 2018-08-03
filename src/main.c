@@ -1,12 +1,8 @@
-#include <stdio.h>
-#include <psp2/kernel/modulemgr.h>
 #include <psp2/kernel/threadmgr.h>
-#include <psp2/sysmodule.h>
-#include <psp2/io/fcntl.h>
-#include <psp2/io/stat.h>
-#include <psp2/net/netctl.h>
+#include <psp2/kernel/modulemgr.h>
 #include <taihen.h>
 
+#include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 #define TAIPOOL_AS_STDLIB
@@ -22,9 +18,6 @@ int run;
 
 
 void __unused _start() __attribute__ ((weak, alias ("module_start")));
-
-void net_start();
-
 int __unused module_start(SceSize argc, const void *args)
 {
 	taipool_init(1 * 1024 * 1024);
