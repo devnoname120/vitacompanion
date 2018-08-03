@@ -148,8 +148,6 @@ static void *netctl_cb(int event_type, void *arg)
 	return NULL;
 }
 
-void _start() __attribute__ ((weak, alias ("module_start")));
-
 static int net_thread(SceSize args, void *argp)
 {
 	int ret, state;
@@ -175,7 +173,8 @@ static int net_thread(SceSize args, void *argp)
 	return 0;
 }
 
-int module_start(SceSize argc, const void *args)
+void __unused _start() __attribute__ ((weak, alias ("module_start")));
+int __unused module_start(SceSize argc, const void *args)
 {
 	taipool_init(1 * 1024 * 1024);
 
@@ -194,7 +193,7 @@ int module_start(SceSize argc, const void *args)
 	return SCE_KERNEL_START_SUCCESS;
 }
 
-int module_stop(SceSize argc, const void *args)
+int __unused module_stop(SceSize argc, const void *args)
 {
 	run = 0;
 	sceKernelWaitThreadEnd(net_thid, NULL, NULL);
