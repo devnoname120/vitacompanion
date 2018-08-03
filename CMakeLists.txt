@@ -24,14 +24,14 @@ link_directories(
 )
 
 add_executable(vitacompanion
-  main.c
-  main.h
-  log.c
-  log.h
-        cmd.c
-        cmd.h
-        net.c
-        net.h
+        src/main.c
+        src/main.h
+        src/log.c
+        src/log.h
+        src/cmd.c
+        src/cmd.h
+        src/net.c
+        src/net.h
 )
 
 
