@@ -12,8 +12,7 @@
 #define TAIPOOL_AS_STDLIB
 #include <taipool.h>
 
-#define MOD_PATH "ux0:data/tai/kplugin.skprx"
-#define LOADER_PORT 1338
+#include "cmd_handler.h"
 
 #define ENABLE_LOGGING 0
 
@@ -37,78 +36,8 @@ static void LOG(const char *str, ...)
 static SceUID net_thid;
 static int net_connected;
 static int netctl_cb_id;
-static int run;
-static SceUID loader_thid;
-static int loader_sockfd;
+int run;
 
-static int loader_thread(SceSize args, void *argp)
-{
-	SceNetSockaddrIn loaderaddr;
-
-	loader_sockfd = sceNetSocket("vitacompanion_loader_sock",
-		SCE_NET_AF_INET,
-		SCE_NET_SOCK_STREAM,
-		0);
-
-	loaderaddr.sin_family = SCE_NET_AF_INET;
-	loaderaddr.sin_addr.s_addr = sceNetHtonl(SCE_NET_INADDR_ANY);
-	loaderaddr.sin_port = sceNetHtons(LOADER_PORT);
-
-	sceNetBind(loader_sockfd, (SceNetSockaddr *)&loaderaddr, sizeof(loaderaddr));
-
-	sceNetListen(loader_sockfd, 128);
-
-	while (run) {
-		SceNetSockaddrIn clientaddr;
-		int client_sockfd;
-		unsigned int addrlen = sizeof(clientaddr);
-
-		client_sockfd = sceNetAccept(loader_sockfd, (SceNetSockaddr *)&clientaddr, &addrlen);
-		if (client_sockfd >= 0) {
-			sceNetSocketClose(client_sockfd);
-
-			SceUID mod_id;
-			tai_module_args_t arg1;
-			arg1.size = sizeof(arg1);
-			arg1.pid = KERNEL_PID;
-			arg1.args = 0;
-			arg1.argp = NULL;
-			arg1.flags = 0;
-			mod_id = taiLoadStartKernelModuleForUser(MOD_PATH, &arg1);
-			if (mod_id < 0)
-				continue;
-
-			tai_module_args_t arg2;
-			arg2.size = sizeof(arg2);
-			arg2.pid = KERNEL_PID;
-			arg2.args = 0;
-			arg2.argp = NULL;
-			arg2.flags = 0;
-			taiStopUnloadKernelModuleForUser(mod_id, &arg2, NULL, NULL);
-		} else {
-			break;
-		}
-	}
-
-	sceKernelExitDeleteThread(0);
-	return 0;
-}
-
-static void loader_start()
-{
-	loader_thid = sceKernelCreateThread("vitacompanion_loader_thread",
-		loader_thread, 0x40, 0x10000, 0, 0, NULL);
-
-	run = 1;
-	sceKernelStartThread(loader_thid, 0, NULL);
-}
-
-static void loader_end()
-{
-	run = 0;
-	sceNetSocketClose(loader_sockfd);
-	sceKernelWaitThreadEnd(loader_thid, NULL, NULL);
-}
 
 static void do_net_connected()
 {

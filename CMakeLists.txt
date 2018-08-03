@@ -25,6 +25,7 @@ link_directories(
 
 add_executable(vitacompanion
   main.c
+  cmd_handler.c
 )
 
 
@@ -41,6 +42,7 @@ target_link_libraries(vitacompanion
   SceKernelThreadMgr_stub_weak
   SceIofilemgr_stub_weak
   SceRtc_stub_weak
+  SceAppMgr_stub
 )
 
 set_target_properties(vitacompanion
