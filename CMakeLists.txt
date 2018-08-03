@@ -45,10 +45,9 @@ target_link_libraries(vitacompanion
 
 set_target_properties(vitacompanion
   PROPERTIES LINK_FLAGS "-nostdlib"
-  COMPILE_FLAGS "-D__VITA_KERNEL__"
 )
 
-vita_create_self(vitacompanion.skprx vitacompanion
+vita_create_self(vitacompanion.suprx vitacompanion
   UNSAFE
   CONFIG ${CMAKE_SOURCE_DIR}/vitacompanion.yml
 )
