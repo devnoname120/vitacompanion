@@ -15,6 +15,16 @@ const cmd_definition cmd_definitions[] = {
         .name = "launch",
         .arg_count = 1,
         .executor = &cmd_launch
+    },
+    {
+        .name = "reboot",
+        .arg_count = 0,
+        .executor = &cmd_reboot
+    },
+    {
+        .name = "screen",
+        .arg_count = 1,
+        .executor = &cmd_screen
     }
 };
 
@@ -49,4 +59,24 @@ void cmd_launch(char **arg_list, size_t arg_count, char *res_msg) {
 
     char *msg = "Launched.\n";
     strncpy(res_msg, msg, strlen(msg));
+}
+
+void cmd_reboot(char **arg_list, size_t arg_count, char *res_msg) {
+    scePowerRequestColdReset();
+    char *msg = "Rebooting...\n";
+    strncpy(res_msg, msg, strlen(msg));
+}
+
+void cmd_screen(char **arg_list, size_t arg_count, char *res_msg) {
+    char *state = arg_list[1];
+
+    if (!strcmp(state, "on")) {
+        scePowerRequestDisplayOn();
+        strcpy(res_msg, "Turning display on...\n");
+    } else if (!strcmp(state, "off")) {
+        scePowerRequestDisplayOff();
+        strcpy(res_msg, "Turning display off...\n");
+    } else {
+        strcpy(res_msg, "Error: param should be 'on' or 'off'\n");
+    }
 }

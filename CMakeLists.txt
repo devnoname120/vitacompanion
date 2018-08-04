@@ -52,6 +52,7 @@ target_link_libraries(vitacompanion
   SceIofilemgr_stub_weak
   SceRtc_stub_weak
   SceAppMgr_stub
+  ScePower_stub
 )
 
 set_target_properties(vitacompanion
