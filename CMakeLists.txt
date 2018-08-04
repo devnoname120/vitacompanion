@@ -32,7 +32,10 @@ add_executable(vitacompanion
         src/cmd.h
         src/net.c
         src/net.h
-)
+        src/parser.c
+        src/parser.h
+        src/cmd_definitions.c
+        src/cmd_definitions.h)
 
 
 target_link_libraries(vitacompanion

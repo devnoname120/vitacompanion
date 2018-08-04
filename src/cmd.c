@@ -1,40 +1,38 @@
 #include <psp2/kernel/modulemgr.h>
 #include <vitasdk.h>
+#include <stdbool.h>
 #include "cmd.h"
+#include "parser.h"
+#include "cmd_definitions.h"
 
 #define CMD_PORT 1338
 
 extern int run;
 
+#define ARG_MAX (20)
+
 static SceUID loader_thid;
 static int loader_sockfd;
 
-int cmd_handle(char *cmd, unsigned int size, char *res_msg) {
-	if(!strcmp(cmd, "destroy\n")) {
-		sceAppMgrDestroyOtherApp();
+void cmd_handle(char *cmd, unsigned int cmd_size, char *res_msg) {
+	char *arg_list[ARG_MAX];
 
-		char *msg = "Apps destroyed.\n";
-		strncpy(res_msg, msg, strlen(msg));
-	} else if(!strncmp(cmd, "launch ", strlen("launch "))) {
-		char uri[32];
+    size_t arg_count = parse_cmd(cmd, cmd_size, arg_list, ARG_MAX);
+    const cmd_definition *cmd_def = cmd_get_definition(arg_list[0]);
 
-		// FIXME Dirty fix for trailing '\n'
-		cmd[7 + 9] = '\0';
-		snprintf(uri, 32, "psgm:play?titleid=%s", cmd + 7);
+    if (cmd_def == NULL) {
+        char *msg = "Error: Unknown command.\n";
+        strcpy(res_msg, msg);
+        return;
+    }
 
-		for (int i = 0; i < 40; i++) {
-			if (sceAppMgrLaunchAppByUri(0xFFFFF, uri) != 0) {
-				break;
-			}
-			sceKernelDelayThread(10000);
-		}
+    if (cmd_def->arg_count != arg_count - 1) {
+        char *msg = "Error: Incorrect number of arguments.\n";
+        strcpy(res_msg, msg);
+        return;
+    }
 
-		char *msg = "Launched.\n";
-		strncpy(res_msg, msg, strlen(msg));
-	} else {
-		char *msg = "Unknown command\n";
-		strncpy(res_msg, msg, strlen(msg));
-	}
+	cmd_def->executor(arg_list, arg_count, res_msg);
 }
 
 int cmd_thread(unsigned int args, void *argp)
@@ -64,7 +62,7 @@ int cmd_thread(unsigned int args, void *argp)
 		    char cmd[100] = {0};
             int size = sceNetRecv(client_sockfd, cmd, sizeof(cmd), 0);
 
-            char res_msg[30] = "\n";
+            char res_msg[60] = {0};
 
             if (size >= 0)
 				cmd_handle(cmd, (unsigned int)size, res_msg);
