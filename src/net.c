@@ -52,6 +52,8 @@ static void *netctl_cb(int event_type, void *arg)
 {
 	LOG("netctl cb: %d\n", event_type);
 
+	// TODO sceNetCtlInetGetResult
+
 	if ((event_type == 1 || event_type == 2) && net_connected == 1) {
 		ftpvita_fini();
         cmd_end();
