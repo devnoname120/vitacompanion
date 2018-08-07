@@ -21,14 +21,12 @@ void cmd_handle(char *cmd, unsigned int cmd_size, char *res_msg) {
     const cmd_definition *cmd_def = cmd_get_definition(arg_list[0]);
 
     if (cmd_def == NULL) {
-        char *msg = "Error: Unknown command.\n";
-        strcpy(res_msg, msg);
+        strcpy(res_msg, "Error: Unknown command.\n");
         return;
     }
 
     if (cmd_def->arg_count != arg_count - 1) {
-        char *msg = "Error: Incorrect number of arguments.\n";
-        strcpy(res_msg, msg);
+        strcpy(res_msg, "Error: Incorrect number of arguments.\n");
         return;
     }
 

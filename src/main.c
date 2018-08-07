@@ -20,6 +20,7 @@ int run;
 void __unused _start() __attribute__ ((weak, alias ("module_start")));
 int __unused module_start(SceSize argc, const void *args)
 {
+    // Required for ftpvita
 	taipool_init(1 * 1024 * 1024);
 
 #if ENABLE_LOGGING == 1
