@@ -1,17 +1,21 @@
 # Vitacompanion
-Vitacompanion is a PS Vita daemon which allows developers to upload and install packages on the device in an faster way.
-Vitacompanion runs as tai userspace module and it binds the port 1337 to an FTP server and the port 1338 to a command server.
 
-# Build and installation
+Vitacompanion is a user module which makes development easier. It does two things:
+- Open a FTP server on port 1337
+- Listen to commands on port 1338
+
+# Build
+
 ```bash
-cd vitacompanion
 mkdir build
 cd build
-cmake ...
+cmake ..
 make
 ```
-run VitaShell on the device, press SELECT to activate the FTP server and copy vitacompanion.suprx to ur0:/tai and add the
-following line to ur0:/tai/config.txt
+
+# Install
+
+Run VitaShell on your PS Vita, press SELECT to activate the FTP server and copy `vitacompanion.suprx` to `ur0:/tai`. Finally, add the following line to `ur0:/tai/config.txt`:
 
 ```
 *main
@@ -19,15 +23,29 @@ ur0:tai/vitacompanion.suprx
 ```
 
 # Usage
+
+## FTP server
+
 You can upload stuff to your vita by running:
 ```
-curl -T hello_cpp_world.vpk ftp://anonymous@IP_TO_PSVITA:1337/ux0:yourdir/a.vpk
+curl --ftp-method nocwd -T somefile.zip ftp://IP_TO_VITA:1337/ux0:/somedir/
 ```
-You can reboot your vita by running
+Or you can use your regular FTP client.
+
+## Command server
+
+Send a command by opening a TCP connection to the port 1338 of your Vita.
+
+For example, you can reboot your vita by running:
 ```
 echo reboot | nc IP_TO_PSVITA:1338
 ```
 
-# Available commands:
+Note that you need to append a newline character to the command that you send. `echo` already adds one, which is why it works here.
+
+### Available commands:
 TODO
  
+# Acknowledgements 
+
+Thanks to xerpi for his [vita-ftploader](https://bitbucket.org/xerpi/vita-ftploader/src/87ef1d13a8aa/plugin/?at=master) plugin, I stole a lot of his code (with his permission). Thanks to cpasjuste for [PSP2SHELL](https://github.com/Cpasjuste/PSP2SHELL), it inspired me to create this tool.
