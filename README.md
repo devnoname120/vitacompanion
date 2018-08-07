@@ -1,6 +1,6 @@
 # Vitacompanion
 
-Vitacompanion is a user module which makes development easier. It does two things:
+Vitacompanion is a user module which makes developing homebrews for the PS Vita device easier. It does two things:
 - Open a FTP server on port 1337
 - Listen to commands on port 1338
 
@@ -44,6 +44,7 @@ echo reboot | nc IP_TO_PSVITA:1338
 Note that you need to append a newline character to the command that you send. `echo` already adds one, which is why it works here.
 
 ### Available commands:
+
 TODO
  
 # Acknowledgements 
