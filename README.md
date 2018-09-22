@@ -38,7 +38,7 @@ Send a command by opening a TCP connection to the port 1338 of your Vita.
 
 For example, you can reboot your vita by running:
 ```
-echo reboot | nc IP_TO_PSVITA:1338
+echo reboot | nc IP_TO_PSVITA 1338
 ```
 
 Note that you need to append a newline character to the command that you send. `echo` already adds one, which is why it works here.
