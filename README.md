@@ -43,9 +43,14 @@ echo reboot | nc IP_TO_PSVITA 1338
 
 Note that you need to append a newline character to the command that you send. `echo` already adds one, which is why it works here.
 
-### Available commands:
+### Available commands
 
-TODO
+| Command   | Arguments     | Explanation                  |
+| --------- | ------------- | ---------------------------- |
+| `destroy` | none          | kill all runing applications |
+| `launch`  | `<TITLEID>`   | lauch an application by id e.g. `launch VHBB00001` to launch the [Vita Homebrew Browser](https://github.com/devnoname120/vhbb) |
+| `reboot`  | none          | reboot the console           |
+| `screen`  | `on` or `off` | turn screen on or off        |
  
 # Acknowledgements 
 
