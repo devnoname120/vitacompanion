@@ -8,10 +8,11 @@
 #include <vitasdk.h>
 
 #define CMD_PORT 1338
+#define ARG_MAX (20)
 
 extern int run;
-
-#define ARG_MAX (20)
+extern int all_is_up;
+extern int net_connected;
 
 static SceUID loader_thid;
 static int loader_sockfd;
@@ -52,7 +53,7 @@ int cmd_thread(unsigned int args, void* argp)
 
     sceNetListen(loader_sockfd, 128);
 
-    while (run)
+    while (run && net_connected)
     {
         struct SceNetSockaddrIn clientaddr;
         int client_sockfd;
@@ -85,14 +86,11 @@ int cmd_thread(unsigned int args, void* argp)
 void cmd_start()
 {
     loader_thid = sceKernelCreateThread("vitacompanion_cmd_thread", cmd_thread, 0x40, 0x10000, 0, 0, NULL);
-
-    run = 1;
     sceKernelStartThread(loader_thid, 0, NULL);
 }
 
 void cmd_end()
 {
-    run = 0;
     sceNetSocketClose(loader_sockfd);
     sceKernelWaitThreadEnd(loader_thid, NULL, NULL);
 }

@@ -8,6 +8,7 @@
 
 extern int run;
 
+int all_is_up;
 int net_connected;
 
 SceUID net_thid;
@@ -16,8 +17,6 @@ static int netctl_cb_id;
 void net_start()
 {
     net_thid = sceKernelCreateThread("vitacompanion_net_thread", net_thread, 0x40, 0x10000, 0, 0, NULL);
-
-    run = 1;
     sceKernelStartThread(net_thid, 0, NULL);
 }
 
@@ -47,7 +46,7 @@ static void do_net_connected()
         ftpvita_add_device("ur0:");
 
         cmd_start();
-        net_connected = 1;
+        all_is_up = 1;
     }
 }
 
@@ -57,14 +56,16 @@ static void* netctl_cb(int event_type, void* arg)
 
     // TODO sceNetCtlInetGetResult
 
-    if ((event_type == 1 || event_type == 2) && net_connected == 1)
+    if ((event_type == 1 || event_type == 2) && all_is_up == 1)
     {
+        net_connected = 0;
         ftpvita_fini();
         cmd_end();
-        net_connected = 0;
+        all_is_up = 0;
     }
-    else if (event_type == 3 && !net_connected)
+    else if (event_type == 3 && !all_is_up)
     { /* IP obtained */
+        net_connected = 1;
         do_net_connected();
     }
 
