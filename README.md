@@ -54,6 +54,12 @@ Note that you need to append a newline character to the command that you send. `
  
  **Note**: Commands are defined in [`src/cmd_definitions.c`](https://github.com/robsdedude/vitacompanion/blob/master/src/cmd_definitions.c), you can add new commands there.
  
+ # Integration in IDE's
+ 
+ ## VSCode
+ 
+ https://github.com/imcquee/vitacompanion-VSCODE
+ 
 # Acknowledgements 
 
 Thanks to xerpi for his [vita-ftploader](https://bitbucket.org/xerpi/vita-ftploader/src/87ef1d13a8aa/plugin/?at=master) plugin, I stole a lot of his code (with his permission). Thanks to cpasjuste for [PSP2SHELL](https://github.com/Cpasjuste/PSP2SHELL), it inspired me to create this tool.
