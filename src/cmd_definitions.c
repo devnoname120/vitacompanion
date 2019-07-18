@@ -32,15 +32,11 @@ void cmd_launch(char **arg_list, size_t arg_count, char *res_msg) {
   char uri[32];
 
   snprintf(uri, 32, "psgm:play?titleid=%s", arg_list[1]);
-
-  for (int i = 0; i < 40; i++) {
-    if (sceAppMgrLaunchAppByUri(0xFFFFF, uri) != 0) {
-      break;
+    if (sceAppMgrLaunchAppByUri(0x20000, uri) < 0) {
+      strcpy(res_msg, "There was an error launching the app. Is the TITLEID correct?\n");
     }
-    sceKernelDelayThread(10000);
-  }
 
-  strcpy(res_msg, "Launched.\n");
+    strcpy(res_msg, "Launched.\n");
 }
 
 void cmd_reboot(char **arg_list, size_t arg_count, char *res_msg) {
