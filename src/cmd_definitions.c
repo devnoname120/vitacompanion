@@ -1,7 +1,7 @@
 #include <stdbool.h>
 #include <vitasdk.h>
 #include <stdio.h>
-#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 #include "cmd_definitions.h"
@@ -28,6 +28,16 @@ const cmd_definition cmd_definitions[] = {
         .name = "screen",
         .arg_count = 1,
         .executor = &cmd_screen
+    },
+    {
+        .name = "kmodstart",
+        .arg_count = 1,
+        .executor = &cmd_load_start_kernel
+    },
+        {
+        .name = "kmodstop",
+        .arg_count = 1,
+        .executor = &cmd_stop_unload_kernel
     }
 };
 
@@ -79,3 +89,37 @@ void cmd_screen(char **arg_list, size_t arg_count, char *res_msg) {
         strcpy(res_msg, "Error: param should be 'on' or 'off'\n");
     }
 }
+
+void cmd_load_start_kernel(char **arg_list, size_t arg_count, char *res_msg) {
+    char *module_path = arg_list[1];
+
+    tai_module_args_t argg;
+	argg.size = sizeof(argg);
+	argg.pid = KERNEL_PID;
+	argg.args = 0;
+	argg.argp = NULL;
+	argg.flags = 0;
+	int mod_id = taiLoadStartKernelModuleForUser(module_path, &argg);
+
+    if (mod_id >= 0)
+        strcpy(res_msg, "%d\n", mod_id);
+    else
+        strcpy(res_msg, "Error: module loading failed: 0x%08X\n", mod_id);
+}
+
+void cmd_stop_unload_kernel(char **arg_list, size_t arg_count, char *res_msg) {
+    int module_id = atoi(arg_list[1]);
+
+    tai_module_args_t argg;
+    argg.size = sizeof(argg);
+    argg.pid = KERNEL_PID;
+    argg.args = 0;
+    argg.argp = NULL;
+    argg.flags = 0;
+    int ret = taiStopUnloadKernelModuleForUser(mod_id, &argg, NULL, NULL);
+    printf("Stop unload module: 0x%08X\n", ret);
+
+    if (ret >= 0)
+        strcpy(res_msg, "Success.\n");
+    else
+        strcpy(res_msg, "Error: module unloading failed: 0x%08X\n", ret);

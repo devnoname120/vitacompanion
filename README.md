@@ -45,12 +45,14 @@ Note that you need to append a newline character to the command that you send. `
 
 ### Available commands
 
-| Command   | Arguments     | Explanation                  |
-| --------- | ------------- | ---------------------------- |
-| `destroy` | none          | kill all running applications |
-| `launch`  | `<TITLEID>`   | launch an application by id e.g. `launch VHBB00001` to launch the [Vita Homebrew Browser](https://github.com/devnoname120/vhbb) |
-| `reboot`  | none          | reboot the console           |
-| `screen`  | `on` or `off` | turn screen on or off        |
+| Command     | Arguments     | Explanation                  |
+| ----------- | ------------- | ---------------------------- |
+| `destroy`   | none          | kill all running applications |
+| `kmodstart` | path          | load and start a kernel module (`.skprx`) from a vita path, returns a uid on success |
+| `kmodstop`  | uid           | unload and stop a kernel module from a uid |
+| `launch`    | `<TITLEID>`   | launch an application by id e.g. `launch VHBB00001` to launch the [Vita Homebrew Browser](https://github.com/devnoname120/vhbb) |
+| `reboot`    | none          | reboot the console           |
+| `screen`    | `on` or `off` | turn screen on or off        |
  
  **Note**: Commands are defined in [`src/cmd_definitions.c`](https://github.com/robsdedude/vitacompanion/blob/master/src/cmd_definitions.c), you can add new commands there.
  
