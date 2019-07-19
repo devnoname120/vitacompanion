@@ -34,7 +34,7 @@ void cmd_launch(char **arg_list, size_t arg_count, char *res_msg) {
   snprintf(uri, 32, "psgm:play?titleid=%s", arg_list[1]);
 
   if (sceAppMgrLaunchAppByUri(0x20000, uri) < 0) {
-    strcpy(res_msg, "There was an error launching the app. Is the TITLEID correct?\n");
+    strcpy(res_msg, "Error: cannot launch the app. Is the TITLEID correct?\n");
   } else {
     strcpy(res_msg, "Launched.\n");
   }
