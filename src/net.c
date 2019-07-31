@@ -81,6 +81,14 @@ int net_thread(unsigned int args, void* argp)
     ret = sceNetCtlInit();
     LOG("sceNetCtlInit: 0x%08X\n", ret);
 
+    // If already connected to Wifi
+    int state;
+    sceNetCtlInetGetState(&state);
+    LOG("sceNetCtlInetGetState: 0x%08X\n", state);
+    netctl_cb(state, NULL);
+
+    // FIXME: Add a mutex here, network status might change right before the callback is registered
+
     ret = sceNetCtlInetRegisterCallback(netctl_cb, NULL, &netctl_cb_id);
     LOG("sceNetCtlInetRegisterCallback: 0x%08X\n", ret);
 
