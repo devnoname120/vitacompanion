@@ -44,6 +44,8 @@ static void do_net_connected()
     {
         ftpvita_add_device("ux0:");
         ftpvita_add_device("ur0:");
+        ftpvita_add_device("uma0:");
+        ftpvita_add_device("imc0:");
 
         cmd_start();
         all_is_up = 1;
