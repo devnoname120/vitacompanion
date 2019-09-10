@@ -8,6 +8,7 @@
 #define COUNT_OF(arr) (sizeof(arr) / sizeof(arr[0]))
 
 const cmd_definition cmd_definitions[] = {
+    {.name = "help", .arg_count = 0, .executor = &cmd_help},
     {.name = "destroy", .arg_count = 0, .executor = &cmd_destroy},
     {.name = "launch", .arg_count = 1, .executor = &cmd_launch},
     {.name = "reboot", .arg_count = 0, .executor = &cmd_reboot},
@@ -21,6 +22,11 @@ const cmd_definition *cmd_get_definition(char *cmd_name) {
   }
 
   return NULL;
+}
+
+void cmd_help(char **arg_list, size_t arg_count, char *res_msg) {
+  sceAppMgrDestroyOtherApp();
+  strcpy(res_msg, "Command\t\tArguments\tExplanation\n\nhelp\t\tNone\t\tDisplay this help screen\ndestroy\t\tNone\t\tKill all running applications\nlaunch\t\t<TITLEID>	launch an app by Title ID\nreboot\t\tNone\t\tReboot the console\nscreen\t\ton or off\tTurn screen on or off\n");
 }
 
 void cmd_destroy(char **arg_list, size_t arg_count, char *res_msg) {
