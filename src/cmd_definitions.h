@@ -11,6 +11,7 @@ typedef struct {
 } cmd_definition;
 
 const cmd_definition *cmd_get_definition(char *cmd_name);
+void cmd_help(char **arg_list, size_t arg_count, char *res_msg);
 void cmd_destroy(char **arg_list, size_t arg_count, char *res_msg);
 void cmd_launch(char **arg_list, size_t arg_count, char *res_msg);
 void cmd_reboot(char **arg_list, size_t arg_count, char *res_msg);
