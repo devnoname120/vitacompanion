@@ -26,7 +26,7 @@ const cmd_definition *cmd_get_definition(char *cmd_name) {
 
 void cmd_help(char **arg_list, size_t arg_count, char *res_msg) {
   sceAppMgrDestroyOtherApp();
-  strcpy(res_msg, "Command\t\tArguments\tExplanation\n\nhelp\t\tNone\t\tDisplay this help screen\ndestroy\t\tNone\t\tKill all running applications\nlaunch\t\t<TITLEID>	Launch an app by Title ID\nreboot\t\tNone\t\tReboot the console\nscreen\t\ton or off\tTurn screen on or off\n");
+  strcpy(res_msg, "Command\t\tArguments\tExplanation\n\nhelp\t\tNone\t\tDisplay this help screen\ndestroy\t\tNone\t\tKill all running applications\nlaunch\t\t<TITLEID>\tLaunch an app by Title ID\nreboot\t\tNone\t\tReboot the console\nscreen\t\ton or off\tTurn screen on or off\n");
 }
 
 void cmd_destroy(char **arg_list, size_t arg_count, char *res_msg) {
