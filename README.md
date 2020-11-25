@@ -47,7 +47,7 @@ Note that you need to append a newline character to the command that you send. `
 
 | Command   | Arguments     | Explanation                  |
 | --------- | ------------- | ---------------------------- |
-| `help` | none          | Show a nice little help screen |
+| `help`    | none          | show a nice little help screen |
 | `destroy` | none          | kill all running applications |
 | `launch`  | `<TITLEID>`   | launch an application by id e.g. `launch VHBB00001` to launch the [Vita Homebrew Browser](https://github.com/devnoname120/vhbb) |
 | `reboot`  | none          | reboot the console           |
