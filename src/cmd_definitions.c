@@ -11,7 +11,8 @@ const cmd_definition cmd_definitions[] = {
     {.name = "destroy", .arg_count = 0, .executor = &cmd_destroy},
     {.name = "launch", .arg_count = 1, .executor = &cmd_launch},
     {.name = "reboot", .arg_count = 0, .executor = &cmd_reboot},
-    {.name = "screen", .arg_count = 1, .executor = &cmd_screen}};
+    {.name = "screen", .arg_count = 1, .executor = &cmd_screen},
+    {.name = "vitabright_reload", .arg_count = 0, .executor = &cmd_vitabright_reload}};
 
 const cmd_definition *cmd_get_definition(char *cmd_name) {
   for (unsigned int i = 0; i < COUNT_OF(cmd_definitions); i++) {
@@ -57,4 +58,10 @@ void cmd_screen(char **arg_list, size_t arg_count, char *res_msg) {
   } else {
     strcpy(res_msg, "Error: param should be 'on' or 'off'\n");
   }
+}
+
+
+int vitabrightReload();
+void cmd_vitabright_reload(char **arg_list, size_t arg_count, char *res_msg) {
+  vitabrightReload();
 }

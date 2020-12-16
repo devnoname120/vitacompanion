@@ -53,6 +53,7 @@ target_link_libraries(vitacompanion
   SceRtc_stub_weak
   SceAppMgr_stub
   ScePower_stub
+  vitabright_stub
 )
 
 set_target_properties(vitacompanion
@@ -63,3 +64,4 @@ vita_create_self(vitacompanion.suprx vitacompanion
   UNSAFE
   CONFIG ${CMAKE_SOURCE_DIR}/vitacompanion.yml
 )
+
