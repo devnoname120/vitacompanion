@@ -11,6 +11,7 @@ const cmd_definition cmd_definitions[] = {
     {.name = "help", .description = "Display this help screen", .arg_count = 0, .executor = &cmd_help},
     {.name = "destroy", .description = "Kill all running applications", .arg_count = 0, .executor = &cmd_destroy},
     {.name = "launch", .description = "Launch an app by Title ID", .arg_count = 1, .executor = &cmd_launch},
+    {.name = "kill", .description = "Kill an app by Title ID", .arg_count = 1, .executor = &cmd_kill},
     {.name = "reboot", .description = "Reboot the console", .arg_count = 0, .executor = &cmd_reboot},
     {.name = "screen", .description = "Turn the screen on or off", .arg_count = 1, .executor = &cmd_screen}
 };
@@ -45,6 +46,15 @@ void cmd_help(char **arg_list, size_t arg_count, char *res_msg) {
     strcat(res_msg, buf);
   }
 
+}
+
+
+void cmd_kill(char **arg_list, size_t arg_count, char* res_msg) {
+  if (sceAppMgrDestroyAppByName(arg_list[1]) < 0) {
+    strcpy(res_msg, "Error: cannot kill the app. Is the TITLEID correct?\n");
+  } else {
+    strcpy(res_msg, "Killed.\n");
+  }
 }
 
 void cmd_destroy(char **arg_list, size_t arg_count, char *res_msg) {
