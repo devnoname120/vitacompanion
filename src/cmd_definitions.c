@@ -50,8 +50,6 @@ void cmd_help(char **arg_list, size_t arg_count, char *res_msg) {
 
 
 void cmd_kill(char **arg_list, size_t arg_count, char* res_msg) {
-  if (!arg_count) {
-    strcpy(res_msg, "Invalid argument number!");
   } else if (!sceAppMgrDestroyAppByName(arg_list[1])) {
     strcpy(res_msg, "App killed sucessfully!");
   } else {
