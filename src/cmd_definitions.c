@@ -50,10 +50,10 @@ void cmd_help(char **arg_list, size_t arg_count, char *res_msg) {
 
 
 void cmd_kill(char **arg_list, size_t arg_count, char* res_msg) {
-  } else if (!sceAppMgrDestroyAppByName(arg_list[1])) {
-    strcpy(res_msg, "App killed sucessfully!");
+  if (sceAppMgrDestroyAppByName(arg_list[1]) < 0) {
+    strcpy(res_msg, "Error: cannot kill the app. Is the TITLEID correct?\n");
   } else {
-    strcpy(res_msg, "Unable to kill App");
+    strcpy(res_msg, "Killed.\n");
   }
 }
 
