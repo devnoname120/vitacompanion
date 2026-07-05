@@ -17,11 +17,18 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q -Wall -O3 -fno-pic -fno-PIC -std=gnu9
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fno-rtti -fno-exceptions")
 
 include_directories(
+  ${CMAKE_SOURCE_DIR}/vendor/libftpvita
 )
 
 link_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
 )
+
+add_library(ftpvita STATIC
+        vendor/libftpvita/ftpvita.c
+        vendor/libftpvita/ftpvita.h
+        vendor/libftpvita/ftpvita_path.c
+        vendor/libftpvita/ftpvita_path.h)
 
 add_executable(vitacompanion
         src/main.c

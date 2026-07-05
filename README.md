@@ -28,9 +28,18 @@ ur0:tai/vitacompanion.suprx
 
 You can upload stuff to your vita by running:
 ```
-curl --ftp-method nocwd -T somefile.zip ftp://IP_TO_VITA:1337/ux0:/somedir/
+curl -T somefile.zip ftp://IP_TO_VITA:1337/ux0:/somedir/somefile.zip
 ```
-Or you can use your regular FTP client.
+Or you can use your regular FTP client. The server accepts both Vita-style
+paths such as `ux0:/somedir/` and FTP absolute paths such as `/ux0:/somedir/`.
+It also supports `EPSV`, `PASV`, `LIST`, and `NLST` for compatibility with
+generic FTP clients.
+
+If you want curl to send the full FTP path directly instead of changing
+directories first, use the double-slash URL form:
+```
+curl --ftp-method nocwd ftp://IP_TO_VITA:1337//ux0:/somedir/
+```
 
 ## Command server
 
