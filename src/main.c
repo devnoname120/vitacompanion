@@ -8,6 +8,7 @@
 #include "cmd.h"
 #include "main.h"
 #include "net.h"
+#include "nosleep.h"
 
 #include <taipool.h>
 
@@ -28,6 +29,7 @@ int __unused module_start(SceSize argc, const void* args)
     sceIoClose(fd);
 #endif
     run = 1;
+    nosleep_start();
     net_start();
 
     return SCE_KERNEL_START_SUCCESS;
@@ -36,6 +38,7 @@ int __unused module_start(SceSize argc, const void* args)
 int __unused module_stop(SceSize argc, const void* args)
 {
     run = 0;
+    nosleep_end();
     sceKernelWaitThreadEnd(net_thid, NULL, NULL);
 
     if (all_is_up)

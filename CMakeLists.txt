@@ -32,6 +32,8 @@ add_executable(vitacompanion
         src/cmd.h
         src/net.c
         src/net.h
+        src/nosleep.c
+        src/nosleep.h
         src/parser.c
         src/parser.h
         src/cmd_definitions.c
@@ -52,6 +54,7 @@ target_link_libraries(vitacompanion
   SceIofilemgr_stub_weak
   SceRtc_stub_weak
   SceAppMgr_stub
+  SceProcessmgr_stub_weak
   ScePower_stub
 )
 

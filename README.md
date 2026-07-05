@@ -45,12 +45,15 @@ Note that you need to append a newline character to the command that you send. `
 
 ### Available commands
 
-| Command   | Arguments     | Explanation                  |
-| --------- | ------------- | ---------------------------- |
-| `destroy` | none          | kill all running applications |
-| `launch`  | `<TITLEID>`   | launch an application by id e.g. `launch VHBB00001` to launch the [Vita Homebrew Browser](https://github.com/devnoname120/vhbb) |
-| `reboot`  | none          | reboot the console           |
-| `screen`  | `on` or `off` | turn screen on or off        |
+| Command   | Arguments               | Explanation                  |
+| --------- | ----------------------- | ---------------------------- |
+| `help`    | none                    | display the help screen      |
+| `destroy` | none                    | kill all running applications |
+| `launch`  | `<TITLEID>`             | launch an application by id e.g. `launch VHBB00001` to launch the [Vita Homebrew Browser](https://github.com/devnoname120/vhbb) |
+| `kill`    | `<TITLEID>`             | kill an application by id    |
+| `nosleep` | `on`, `off` or `status` | enable or disable automatic suspend prevention. This is enabled by default at boot |
+| `reboot`  | none                    | reboot the console           |
+| `screen`  | `on` or `off`           | turn screen on or off        |
  
  **Note**: Commands are defined in [`src/cmd_definitions.c`](https://github.com/robsdedude/vitacompanion/blob/master/src/cmd_definitions.c), you can add new commands there.
  
