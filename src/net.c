@@ -54,7 +54,7 @@ static void do_net_connected()
     }
 }
 
-static void* netctl_cb(int event_type, void* arg)
+static void netctl_cb(int event_type, void* arg)
 {
     LOG("netctl cb: %d\n", event_type);
 
@@ -72,8 +72,6 @@ static void* netctl_cb(int event_type, void* arg)
         net_connected = 1;
         do_net_connected();
     }
-
-    return NULL;
 }
 
 int net_thread(unsigned int args, void* argp)

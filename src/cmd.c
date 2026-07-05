@@ -9,6 +9,7 @@
 
 #define CMD_PORT 1338
 #define ARG_MAX (20)
+#define CMD_RES_MAX (2048)
 
 extern int run;
 extern int all_is_up;
@@ -19,9 +20,16 @@ static int loader_sockfd;
 
 void cmd_handle(char* cmd, unsigned int cmd_size, char* res_msg)
 {
-    char* arg_list[ARG_MAX];
+    char* arg_list[ARG_MAX] = { 0 };
 
     size_t arg_count = parse_cmd(cmd, cmd_size, arg_list, ARG_MAX);
+
+    if (arg_count == 0)
+    {
+        strcpy(res_msg, "Error: Empty command.\n");
+        return;
+    }
+
     const cmd_definition* cmd_def = cmd_get_definition(arg_list[0]);
 
     if (cmd_def == NULL)
@@ -63,14 +71,19 @@ int cmd_thread(unsigned int args, void* argp)
         if (client_sockfd >= 0)
         {
             char cmd[100] = { 0 };
-            int size = sceNetRecv(client_sockfd, cmd, sizeof(cmd), 0);
+            int size = sceNetRecv(client_sockfd, cmd, sizeof(cmd) - 1, 0);
 
-            char res_msg[60] = { 0 };
+            char res_msg[CMD_RES_MAX] = { 0 };
 
-            if (size >= 0)
+            if (size > 0)
+            {
+                cmd[size] = '\0';
                 cmd_handle(cmd, (unsigned int)size, res_msg);
+            }
 
-            sceNetSend(client_sockfd, res_msg, strlen(res_msg), 0);
+            if (res_msg[0] != '\0')
+                sceNetSend(client_sockfd, res_msg, strlen(res_msg), 0);
+
             sceNetSocketClose(client_sockfd);
         }
         else

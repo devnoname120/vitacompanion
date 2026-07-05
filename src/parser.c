@@ -9,20 +9,23 @@
 
 size_t parse_cmd(char *cmd, size_t cmd_size, char **arg_list, size_t arg_max) {
     size_t arg_count = 0;
-    char *cur_arg = cmd;
+    bool in_arg = false;
 
-    // load my stuff\n ==> load\0my\0stuff\0
     for (unsigned int i=0; i < cmd_size && arg_count < arg_max; i ++) {
-        if (cmd[i] == ' ' || cmd[i] == '\n') {
+        bool is_endline = cmd[i] == '\n' || cmd[i] == '\r';
+        bool is_space = cmd[i] == ' ' || cmd[i] == '\t' || is_endline;
+
+        if (is_space) {
             cmd[i] = '\0';
-            arg_list[arg_count] = cur_arg;
+            in_arg = false;
 
-            cur_arg = &(cmd[i+1]);
+            if (is_endline) {
+                break;
+            }
+        } else if (!in_arg) {
+            arg_list[arg_count] = &(cmd[i]);
             arg_count += 1;
-        }
-
-        if (cmd[i] == '\n') {
-            break;
+            in_arg = true;
         }
     }
 
