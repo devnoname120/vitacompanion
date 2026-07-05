@@ -144,3 +144,10 @@ void ftpvita_format_epsv_response(char *out, size_t out_size, unsigned short por
 {
 	snprintf(out, out_size, "229 Entering Extended Passive Mode (|||%u|)" FTPVITA_EOL, (unsigned int)port);
 }
+
+void ftpvita_format_mdtm_response(char *out, size_t out_size,
+	int year, int month, int day, int hour, int minute, int second)
+{
+	snprintf(out, out_size, "213 %04d%02d%02d%02d%02d%02d" FTPVITA_EOL,
+		year, month, day, hour, minute, second);
+}

@@ -15,3 +15,4 @@ Local changes:
 - Tolerate common `LIST` options such as `-a` and `-la`.
 - Add `EPSV` support using the existing passive data socket setup.
 - Add `NLST` support for clients that request filename-only listings.
+- Add `MDTM` support for clients that query remote modification times.

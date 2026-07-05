@@ -121,11 +121,34 @@ class LibftpvitaCompatTests(unittest.TestCase):
             """
         )
 
+    def test_mdtm_response_uses_ftp_timestamp_format(self):
+        compile_and_run(
+            r"""
+            #include "ftpvita_path.h"
+
+            #include <stdio.h>
+            #include <stdlib.h>
+            #include <string.h>
+
+            int main(void)
+            {
+                char actual[128];
+                ftpvita_format_mdtm_response(actual, sizeof(actual), 2026, 7, 4, 9, 5, 3);
+                if (strcmp(actual, "213 20260704090503\r\n") != 0) {
+                    fprintf(stderr, "unexpected MDTM reply: %s\n", actual);
+                    exit(1);
+                }
+                return 0;
+            }
+            """
+        )
+
     def test_ftp_command_table_wires_compatibility_commands(self):
         source = (VENDOR / "ftpvita.c").read_text()
         self.assertIn("ftpvita_path_from_list_args", source)
         self.assertIn("add_entry(EPSV)", source)
         self.assertIn("add_entry(NLST)", source)
+        self.assertIn("add_entry(MDTM)", source)
 
 
 if __name__ == "__main__":

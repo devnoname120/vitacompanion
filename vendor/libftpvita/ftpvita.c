@@ -809,6 +809,29 @@ static void cmd_SIZE_func(ftpvita_client_info_t *client)
 	client_send_ctrl_msg(client, cmd);
 }
 
+static void cmd_MDTM_func(ftpvita_client_info_t *client)
+{
+	SceIoStat stat;
+	char path[PATH_MAX];
+	char cmd[64];
+
+	gen_ftp_fullpath(client, path, sizeof(path));
+
+	if (sceIoGetstat(get_vita_path(path), &stat) < 0) {
+		client_send_ctrl_msg(client, "550 The file doesn't exist." FTPVITA_EOL);
+		return;
+	}
+
+	ftpvita_format_mdtm_response(cmd, sizeof(cmd),
+		stat.st_mtime.year,
+		stat.st_mtime.month,
+		stat.st_mtime.day,
+		stat.st_mtime.hour,
+		stat.st_mtime.minute,
+		stat.st_mtime.second);
+	client_send_ctrl_msg(client, cmd);
+}
+
 static void cmd_REST_func(ftpvita_client_info_t *client)
 {
 	char cmd[64];
@@ -822,6 +845,7 @@ static void cmd_FEAT_func(ftpvita_client_info_t *client)
 	/*So client would know that we support resume */
 	client_send_ctrl_msg(client, "211-extensions" FTPVITA_EOL);
 	client_send_ctrl_msg(client, " EPSV" FTPVITA_EOL);
+	client_send_ctrl_msg(client, " MDTM" FTPVITA_EOL);
 	client_send_ctrl_msg(client, " REST STREAM" FTPVITA_EOL);
 	client_send_ctrl_msg(client, " UTF8" FTPVITA_EOL);
 	client_send_ctrl_msg(client, "211 end" FTPVITA_EOL);
@@ -868,6 +892,7 @@ static const cmd_dispatch_entry cmd_dispatch_table[] = {
 	add_entry(RNFR),
 	add_entry(RNTO),
 	add_entry(SIZE),
+	add_entry(MDTM),
 	add_entry(REST),
 	add_entry(FEAT),
 	add_entry(OPTS),
