@@ -150,6 +150,11 @@ class LibftpvitaCompatTests(unittest.TestCase):
         self.assertIn("add_entry(NLST)", source)
         self.assertIn("add_entry(MDTM)", source)
 
+    def test_commands_without_argument_separator_have_empty_args(self):
+        source = (VENDOR / "ftpvita.c").read_text()
+        self.assertIn('client->recv_cmd_args = "";', source)
+        self.assertNotIn("client->recv_cmd_args = client->recv_buffer;", source)
+
 
 if __name__ == "__main__":
     unittest.main()
