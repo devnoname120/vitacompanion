@@ -121,6 +121,7 @@ target_link_libraries(vitacompanion
   SceKernelModulemgr_stub
   SceProcessmgr_stub_weak
   ScePower_stub
+  ScePromoterUtil_stub_weak
   ${CMAKE_CURRENT_BINARY_DIR}/libvitacompanion_kernel_stub.a
 )
 
