@@ -8,7 +8,7 @@
 
 #define SHELL_UTIL_LIBRARY_NID 0xD2B1C8AE
 #define SHELL_REQUEST_COLD_RESET_NID 0x636544FB
-#define REBOOT_WATCHDOG_DELAY_US (15 * 1000 * 1000)
+#define REBOOT_WATCHDOG_DELAY_US (5 * 1000 * 1000)
 
 typedef int (*shell_request_cold_reset_fn)(int unknown);
 

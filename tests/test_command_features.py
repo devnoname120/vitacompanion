@@ -65,7 +65,7 @@ class CommandFeatureTests(unittest.TestCase):
 
             #define SHELL_UTIL_LIBRARY_NID 0xD2B1C8AE
             #define SHELL_REQUEST_COLD_RESET_NID 0x636544FB
-            #define WATCHDOG_DELAY_US (15 * 1000 * 1000)
+            #define WATCHDOG_DELAY_US (5 * 1000 * 1000)
 
             static SceKernelThreadEntry watchdog_entry;
             static int call_index;
