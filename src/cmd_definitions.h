@@ -22,6 +22,7 @@ void cmd_nosleep(char **arg_list, size_t arg_count, char *res_msg);
 void cmd_quit(char **arg_list, size_t arg_count, char *res_msg);
 void cmd_reboot(char **arg_list, size_t arg_count, char *res_msg);
 void cmd_screen(char **arg_list, size_t arg_count, char *res_msg);
+void cmd_screenshot(char **arg_list, size_t arg_count, char *res_msg);
 void cmd_version(char **arg_list, size_t arg_count, char *res_msg);
 void cmd_wait(char **arg_list, size_t arg_count, char *res_msg);
 void cmd_press(char **arg_list, size_t arg_count, char *res_msg);

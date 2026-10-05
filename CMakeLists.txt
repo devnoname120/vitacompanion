@@ -60,6 +60,9 @@ target_compile_definitions(vitacompanion_kernel PRIVATE
 target_link_libraries(vitacompanion_kernel
   taihenForKernel_stub
   SceCtrlForDriver_stub
+  SceDisplayForDriver_stub
+  SceSysclibForDriver_stub
+  SceSysmemForDriver_stub
   SceThreadmgrForDriver_stub
   gcc
 )
@@ -93,6 +96,10 @@ add_executable(vitacompanion
         src/input_parse.c
         src/version.c
         src/version.h
+        src/screenshot.c
+        src/screenshot.h
+        src/screenshot_format.c
+        src/screenshot_format.h
         src/cmd_definitions.c
         src/cmd_definitions.h)
 
@@ -114,6 +121,7 @@ target_link_libraries(vitacompanion
   SceNet_stub_weak
   SceNetCtl_stub_weak
   SceSysmodule_stub_weak
+  SceSysmem_stub_weak
   SceKernelThreadMgr_stub_weak
   SceIofilemgr_stub_weak
   SceRtc_stub_weak
