@@ -101,12 +101,39 @@ void cmd_nosleep(char **arg_list, size_t arg_count, char *res_msg) {
   }
 }
 
+/*
+ * sceAppMgrLaunchAppByUri succeeds for any title ID, and SceShell then shows
+ * a full-screen error when the app cannot be started. Ask the package
+ * promoter first so that a wrong title ID is reported to the client instead.
+ */
+static bool app_is_installed(const char *title_id) {
+  bool loaded = sceSysmoduleIsLoadedInternal(
+    SCE_SYSMODULE_INTERNAL_PROMOTER_UTIL) == SCE_SYSMODULE_LOADED;
+  bool installed = true;
+  int unused;
+
+  /* If the promoter is unavailable, let the launch go ahead. */
+  if (!loaded &&
+      sceSysmoduleLoadModuleInternal(SCE_SYSMODULE_INTERNAL_PROMOTER_UTIL) < 0)
+    return true;
+
+  if (scePromoterUtilityInit() >= 0) {
+    installed = scePromoterUtilityCheckExist(title_id, &unused) >= 0;
+    scePromoterUtilityExit();
+  }
+
+  if (!loaded)
+    sceSysmoduleUnloadModuleInternal(SCE_SYSMODULE_INTERNAL_PROMOTER_UTIL);
+  return installed;
+}
+
 void cmd_launch(char **arg_list, size_t arg_count, char *res_msg) {
   char uri[32];
 
   snprintf(uri, 32, "psgm:play?titleid=%s", arg_list[1]);
 
-  if (sceAppMgrLaunchAppByUri(0x20000, uri) < 0) {
+  if (!app_is_installed(arg_list[1]) ||
+      sceAppMgrLaunchAppByUri(0x20000, uri) < 0) {
     strcpy(res_msg, "Error: cannot launch the app. Is the TITLEID correct?\n");
   } else {
     strcpy(res_msg, "Launched.\n");
