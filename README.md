@@ -90,6 +90,7 @@ echo 'press cross; wait 100ms; release cross' | nc IP_TO_PSVITA 1338
 | Command   | Arguments                       | Explanation                  |
 | --------- | ------------------------------- | ---------------------------- |
 | `help`    | none                            | display the help screen      |
+| `install` | `<path to .vpk>`                | install a VPK that is already on the Vita, e.g. `install ux0:data/app.vpk` |
 | `launch`  | `<TITLEID>`                     | launch an application by id e.g. `launch VHBB00001` to launch the [Vita Homebrew Browser](https://github.com/devnoname120/vhbb) |
 | `nosleep` | `on`, `off` or `status`         | enable or disable automatic suspend prevention. This is enabled by default at boot |
 | `press`   | input target and values         | press a button, position a stick, or start/update a touch |
@@ -136,6 +137,25 @@ release rear-touch 1
 ```
 
 Use `release all` to clear every synthetic button, stick, and touch.
+
+### Installing a VPK
+
+Upload the VPK over FTP, then ask the command server to install it:
+
+```
+curl -T app.vpk ftp://IP_TO_VITA:1337/ux0:/data/app.vpk
+echo 'install ux0:data/app.vpk' | nc IP_TO_VITA 1338
+```
+
+The VPK is extracted to `ux0:data/vitacompanion_pkg`, a `head.bin` is
+generated if the VPK doesn't include one, and the package is promoted. An
+installed application with the same title ID is updated, and quit first if it
+is running. The reply is `Installed TITLEID.` or an error. Paths cannot
+contain spaces, and ZIP64 or encrypted archives are not supported.
+
+The command server handles one connection at a time, so other commands wait
+until the installation finishes; large VPKs can take a while. The VPK itself
+is left in place.
  
  **Note**: Commands are defined in [`src/cmd_definitions.c`](https://github.com/robsdedude/vitacompanion/blob/master/src/cmd_definitions.c), you can add new commands there.
  

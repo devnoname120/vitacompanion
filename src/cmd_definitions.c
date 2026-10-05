@@ -3,6 +3,7 @@
 #include "nosleep.h"
 #include "parser.h"
 #include "version.h"
+#include "vpk_install.h"
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -22,6 +23,7 @@ static bool validate_wait(char **arg_list, size_t arg_count,
 
 const cmd_definition cmd_definitions[] = {
     {.name = "help", .description = "Display this help screen", .min_arg_count = 0, .max_arg_count = 0, .validator = NULL, .executor = &cmd_help},
+    {.name = "install", .description = "Install a VPK file from the Vita's storage", .min_arg_count = 1, .max_arg_count = 1, .validator = NULL, .executor = &cmd_install},
     {.name = "launch", .description = "Launch an app by Title ID", .min_arg_count = 1, .max_arg_count = 1, .validator = NULL, .executor = &cmd_launch},
     {.name = "nosleep", .description = "Control automatic suspend prevention", .min_arg_count = 1, .max_arg_count = 1, .validator = NULL, .executor = &cmd_nosleep},
     {.name = "press", .description = "Press or position a synthetic input", .min_arg_count = 1, .max_arg_count = 4, .validator = &validate_press, .executor = &cmd_press},
@@ -99,6 +101,24 @@ void cmd_nosleep(char **arg_list, size_t arg_count, char *res_msg) {
   } else {
     strcpy(res_msg, "Error: param should be 'on', 'off' or 'status'\n");
   }
+}
+
+void cmd_install(char **arg_list, size_t arg_count, char *res_msg) {
+  char title_id[VPK_TITLE_ID_LENGTH + 1] = {0};
+  const char *path = arg_list[1];
+  int result;
+
+  (void)arg_count;
+
+  /* Accept the FTP form /ux0:/... as well as ux0:/... */
+  if (path[0] == '/')
+    path++;
+
+  result = vpk_install(path, title_id);
+  if (result < 0)
+    vpk_install_format_error(result, res_msg, CMD_RESPONSE_MAX);
+  else
+    snprintf(res_msg, CMD_RESPONSE_MAX, "Installed %s.\n", title_id);
 }
 
 void cmd_launch(char **arg_list, size_t arg_count, char *res_msg) {
