@@ -19,6 +19,7 @@ const cmd_definition *cmd_get_definition(char *cmd_name);
 void cmd_help(char **arg_list, size_t arg_count, char *res_msg);
 void cmd_launch(char **arg_list, size_t arg_count, char *res_msg);
 void cmd_nosleep(char **arg_list, size_t arg_count, char *res_msg);
+void cmd_promote(char **arg_list, size_t arg_count, char *res_msg);
 void cmd_quit(char **arg_list, size_t arg_count, char *res_msg);
 void cmd_reboot(char **arg_list, size_t arg_count, char *res_msg);
 void cmd_screen(char **arg_list, size_t arg_count, char *res_msg);

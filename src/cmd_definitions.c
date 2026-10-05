@@ -2,6 +2,7 @@
 #include "input.h"
 #include "nosleep.h"
 #include "parser.h"
+#include "promote.h"
 #include "reboot.h"
 #include "version.h"
 #include <stdarg.h>
@@ -26,6 +27,7 @@ const cmd_definition cmd_definitions[] = {
     {.name = "launch", .description = "Launch an app by Title ID", .min_arg_count = 1, .max_arg_count = 1, .validator = NULL, .executor = &cmd_launch},
     {.name = "nosleep", .description = "Control automatic suspend prevention", .min_arg_count = 1, .max_arg_count = 1, .validator = NULL, .executor = &cmd_nosleep},
     {.name = "press", .description = "Press or position a synthetic input", .min_arg_count = 1, .max_arg_count = 4, .validator = &validate_press, .executor = &cmd_press},
+    {.name = "promote", .description = "Promote an extracted app directory", .min_arg_count = 1, .max_arg_count = 1, .validator = NULL, .executor = &cmd_promote},
     {.name = "quit", .description = "Quit an app by Title ID, or all apps", .min_arg_count = 1, .max_arg_count = 1, .validator = NULL, .executor = &cmd_quit},
     {.name = "reboot", .description = "Reboot the console", .min_arg_count = 0, .max_arg_count = 0, .validator = NULL, .executor = &cmd_reboot},
     {.name = "release", .description = "Release a synthetic input", .min_arg_count = 1, .max_arg_count = 2, .validator = &validate_release, .executor = &cmd_release},
@@ -120,6 +122,44 @@ void cmd_reboot(char **arg_list, size_t arg_count, char *res_msg) {
 
   reboot_request();
   strcpy(res_msg, "Rebooting...\n");
+}
+
+void cmd_promote(char **arg_list, size_t arg_count, char *res_msg) {
+  int result;
+
+  (void)arg_count;
+  result = promote_directory(arg_list[1]);
+  switch (result) {
+    case 0:
+      strcpy(res_msg, "Promoted.\n");
+      break;
+    case VITACOMPANION_PROMOTE_ERROR_NOT_DIRECTORY:
+      strcpy(res_msg, "Error: Only directory paths are supported; VPK files are not supported.\n");
+      break;
+    case VITACOMPANION_PROMOTE_ERROR_PATH_TOO_LONG:
+      strcpy(res_msg, "Error: Directory path is too long.\n");
+      break;
+    case VITACOMPANION_PROMOTE_ERROR_INVALID_LAYOUT:
+      strcpy(res_msg, "Error: Directory does not contain a promotable Vita application.\n");
+      break;
+    case VITACOMPANION_PROMOTE_ERROR_INVALID_SFO:
+      strcpy(res_msg, "Error: sce_sys/param.sfo is malformed.\n");
+      break;
+    case VITACOMPANION_PROMOTE_ERROR_INVALID_TITLE_ID:
+      strcpy(res_msg, "Error: TITLE_ID must contain exactly nine uppercase characters.\n");
+      break;
+    case VITACOMPANION_PROMOTE_ERROR_NO_MEMORY:
+      strcpy(res_msg, "Error: Not enough memory to prepare the directory.\n");
+      break;
+    case VITACOMPANION_PROMOTE_ERROR_INCOMPLETE_IO:
+      strcpy(res_msg, "Error: Could not completely read or write promotion metadata.\n");
+      break;
+    default:
+      snprintf(res_msg, CMD_RESPONSE_MAX,
+        "Error: Could not promote directory (0x%08X).\n",
+        (uint32_t)result);
+      break;
+  }
 }
 
 void cmd_screen(char **arg_list, size_t arg_count, char *res_msg) {

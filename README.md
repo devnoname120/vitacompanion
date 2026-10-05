@@ -93,6 +93,7 @@ echo 'press cross; wait 100ms; release cross' | nc IP_TO_PSVITA 1338
 | `launch`  | `<TITLEID>`                     | launch an application by id e.g. `launch VHBB00001` to launch the [Vita Homebrew Browser](https://github.com/devnoname120/vhbb) |
 | `nosleep` | `on`, `off` or `status`         | enable or disable automatic suspend prevention. This is enabled by default at boot |
 | `press`   | input target and values         | press a button, position a stick, or start/update a touch |
+| `promote` | `<directory>`                   | promote an extracted Vita application directory |
 | `quit`    | `<TITLEID>` or `all`            | quit an application by id, or all running applications |
 | `reboot`  | none                            | reboot the console           |
 | `release` | input target                    | release one input or all synthetic input |
@@ -101,6 +102,12 @@ echo 'press cross; wait 100ms; release cross' | nc IP_TO_PSVITA 1338
 | `wait`    | duration ending in `ms` or `s`  | wait before executing the next chained command |
 
 `wait` accepts integer durations such as `wait 1000ms` and `wait 3s`.
+
+`promote` accepts only an extracted application directory, for example
+`promote ux0:data/my-homebrew`. It does not extract or install VPK files. If
+the directory does not already contain `sce_sys/package/head.bin`, Vita
+Companion generates compatible promotion metadata from `sce_sys/param.sfo`,
+including a fallback content ID for homebrew that omits `CONTENT_ID`.
 
 Buttons use the following form:
 

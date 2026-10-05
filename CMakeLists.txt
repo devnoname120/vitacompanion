@@ -91,8 +91,14 @@ add_executable(vitacompanion
         src/nosleep.h
         src/parser.c
         src/parser.h
+        src/promote.c
+        src/promote.h
+        src/promote_head_template.c
+        src/promote_head_template.h
         src/reboot.c
         src/reboot.h
+        src/sha1.c
+        src/sha1.h
         src/input.c
         src/input.h
         src/input_parse.c
@@ -119,7 +125,8 @@ target_link_libraries(vitacompanion
   SceLibKernel_stub_weak
   SceNet_stub_weak
   SceNetCtl_stub_weak
-  SceSysmodule_stub_weak
+  SceSysmodule_stub
+  ScePromoterUtil_stub
   SceKernelThreadMgr_stub_weak
   SceIofilemgr_stub_weak
   SceRtc_stub_weak
