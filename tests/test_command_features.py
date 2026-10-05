@@ -8,7 +8,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
-def compile_and_run(source, support_sources, headers=None):
+def compile_and_run(source, support_sources, headers=None, include_dirs=()):
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = pathlib.Path(tmpdir)
         source_path = tmp / "test.c"
@@ -31,6 +31,8 @@ def compile_and_run(source, support_sources, headers=None):
                 str(ROOT / "src"),
                 "-I",
                 str(ROOT / "include"),
+                *(item for include_dir in include_dirs
+                  for item in ("-I", str(ROOT / include_dir))),
                 str(source_path),
                 *(str(ROOT / source_name) for source_name in support_sources),
                 "-o",
@@ -442,10 +444,143 @@ class CommandFeatureTests(unittest.TestCase):
         self.assertNotIn('{.name = "destroy"', source)
 
     def test_kernel_touch_contacts_keep_stable_ids(self):
-        source = (ROOT / "kernel" / "main.c").read_text()
+        source = (ROOT / "kernel" / "touch_patch.c").read_text()
         self.assertIn("SYNTHETIC_TOUCH_ID_BASE + slot", source)
         self.assertIn("current->reportNum++", source)
-        self.assertIn("touch_states[port][slot].active", source)
+        self.assertIn("points[slot].active", source)
+
+    def test_kernel_touch_patch_handles_batches_and_port_limits(self):
+        compile_and_run(
+            r"""
+            #include "touch_patch.h"
+
+            #include <string.h>
+
+            static int report_matches(const SceTouchReport *report,
+                unsigned int id, int x, int y)
+            {
+                unsigned int i;
+
+                if (report->id != id || report->force != 0x80 ||
+                    report->x != x || report->y != y || report->info != 0)
+                    return 0;
+                for (i = 0; i < sizeof(report->reserved); ++i)
+                {
+                    if (report->reserved[i] != 0)
+                        return 0;
+                }
+                return 1;
+            }
+
+            int main(void)
+            {
+                vitacompanion_touch_point points[VITACOMPANION_TOUCH_SLOTS];
+                SceTouchData front[2];
+                SceTouchData rear;
+
+                memset(points, 0, sizeof(points));
+                memset(front, 0, sizeof(front));
+                memset(&rear, 0, sizeof(rear));
+
+                if (sizeof(SceTouchReport) != 0x10 ||
+                    sizeof(SceTouchData) != 0x90)
+                    return 1;
+
+                points[0].active = 1;
+                points[0].x = 120;
+                points[0].y = 240;
+                points[2].active = 1;
+                points[2].x = 960;
+                points[2].y = 544;
+
+                front[0].timeStamp = 123;
+                front[0].status = 0x12345678;
+                front[0].reportNum = 1;
+                front[0].report[0].id = 7;
+                front[1].timeStamp = 456;
+                front[1].reportNum = 5;
+
+                if (vitacompanion_patch_touch_data(
+                        VITACOMPANION_TOUCH_FRONT, front, 2, points) != 3)
+                    return 2;
+                if (front[0].timeStamp != 123 ||
+                    front[0].status != 0x12345678 ||
+                    front[0].reportNum != 3 ||
+                    front[0].report[0].id != 7 ||
+                    !report_matches(&front[0].report[1], 0x70, 120, 240) ||
+                    !report_matches(&front[0].report[2], 0x72, 960, 544))
+                    return 3;
+                if (front[1].timeStamp != 456 || front[1].reportNum != 6 ||
+                    !report_matches(&front[1].report[5], 0x70, 120, 240))
+                    return 4;
+
+                rear.reportNum = 3;
+                if (vitacompanion_patch_touch_data(
+                        VITACOMPANION_TOUCH_REAR, &rear, 1, points) != 1 ||
+                    rear.reportNum != 4 ||
+                    !report_matches(&rear.report[3], 0x70, 120, 240))
+                    return 5;
+
+                rear.reportNum = 4;
+                if (vitacompanion_patch_touch_data(
+                        VITACOMPANION_TOUCH_REAR, &rear, 1, points) != 0 ||
+                    rear.reportNum != 4 ||
+                    vitacompanion_patch_touch_data(
+                        VITACOMPANION_TOUCH_FRONT, front, 0, points) != 0 ||
+                    vitacompanion_patch_touch_data(2, front, 2, points) != 0 ||
+                    vitacompanion_patch_touch_data(
+                        VITACOMPANION_TOUCH_FRONT, 0, 2, points) != 0 ||
+                    vitacompanion_patch_touch_data(
+                        VITACOMPANION_TOUCH_FRONT, front, 2, 0) != 0)
+                    return 6;
+
+                return 0;
+            }
+            """,
+            ("kernel/touch_patch.c",),
+            headers={
+                "psp2/touch.h": r"""
+                    #ifndef TEST_PSP2_TOUCH_H
+                    #define TEST_PSP2_TOUCH_H
+
+                    #include <stdint.h>
+
+                    #define SCE_TOUCH_MAX_REPORT 8
+
+                    typedef struct SceTouchReport {
+                        uint8_t id;
+                        uint8_t force;
+                        int16_t x;
+                        int16_t y;
+                        uint8_t reserved[8];
+                        uint16_t info;
+                    } SceTouchReport;
+
+                    typedef struct SceTouchData {
+                        uint64_t timeStamp;
+                        uint32_t status;
+                        uint32_t reportNum;
+                        SceTouchReport report[SCE_TOUCH_MAX_REPORT];
+                    } SceTouchData;
+
+                    #endif
+                """,
+            },
+            include_dirs=("kernel",),
+        )
+
+    def test_kernel_hooks_region_ext_user_exports(self):
+        source = (ROOT / "kernel" / "main.c").read_text()
+        cmake = (ROOT / "CMakeLists.txt").read_text()
+
+        self.assertIn("0x3E4F4A81", source)
+        self.assertIn("0x2CF6D7E2", source)
+        self.assertIn("0x9F0ACAF9", source)
+        self.assertIn("ksceKernelCopyFromUser", source)
+        self.assertIn("ksceKernelCopyToUser", source)
+        self.assertIn("ksceKernelPowerTick", source)
+        self.assertIn("SceKernelSuspendForDriver_stub", cmake)
+        self.assertIn("SceSysmemForDriver_stub", cmake)
 
     def test_input_requires_the_expected_kernel_api(self):
         compile_and_run(

@@ -1,18 +1,22 @@
 #include <vitacompanion_input.h>
 #include <vitacompanion_kernel.h>
 
-#include <psp2/touch.h>
+#include "touch_patch.h"
+
 #include <psp2kern/ctrl.h>
 #include <psp2kern/kernel/modulemgr.h>
+#include <psp2kern/kernel/suspend.h>
+#include <psp2kern/kernel/sysmem/data_transfers.h>
 #include <psp2kern/kernel/threadmgr.h>
 #include <stdint.h>
 #include <taihen.h>
 
 #define CTRL_REFRESH_US (8 * 1000)
 #define CTRL_EMULATION_SAMPLES 32
-#define FRONT_TOUCH_REPORTS 6
-#define REAR_TOUCH_REPORTS 4
-#define SYNTHETIC_TOUCH_ID_BASE 0x70
+#define TOUCH_EXT_MAX_BUFFERS 64
+#define SCE_TOUCH_USER_LIBRARY_NID 0x3E4F4A81
+#define SCE_TOUCH_PEEK_REGION_EXT_NID 0x2CF6D7E2
+#define SCE_TOUCH_READ_REGION_EXT_NID 0x9F0ACAF9
 #define USER_BUTTON_MASK 0x0000FFFF
 
 typedef struct {
@@ -21,24 +25,22 @@ typedef struct {
     uint8_t y;
 } analog_state;
 
-typedef struct {
-    int active;
-    uint16_t x;
-    uint16_t y;
-} touch_state;
-
 static SceUID state_mutex = -1;
 static SceUID ctrl_thread_id = -1;
 static volatile int ctrl_thread_running;
 static uint32_t button_state;
 static analog_state analog_states[2];
-static touch_state touch_states[2][VITACOMPANION_TOUCH_SLOTS];
+static vitacompanion_touch_point
+    touch_states[2][VITACOMPANION_TOUCH_SLOTS];
 
 static SceUID touch_hook_ids[4] = {-1, -1, -1, -1};
+static SceUID touch_ext_hook_ids[2] = {-1, -1};
 static tai_hook_ref_t touch_peek_ref;
 static tai_hook_ref_t touch_peek_region_ref;
 static tai_hook_ref_t touch_read_ref;
 static tai_hook_ref_t touch_read_region_ref;
+static tai_hook_ref_t touch_peek_region_ext_ref;
+static tai_hook_ref_t touch_read_region_ext_ref;
 
 static void state_lock(void)
 {
@@ -149,53 +151,76 @@ static int ctrl_thread(unsigned int args, void *argp)
     return 0;
 }
 
-static void patch_touch_data(unsigned int port, SceTouchData *data,
-    unsigned int count)
+static int snapshot_touch_points(unsigned int port,
+    vitacompanion_touch_point points[VITACOMPANION_TOUCH_SLOTS])
 {
-    touch_state points[VITACOMPANION_TOUCH_SLOTS];
-    unsigned int maximum_reports;
-    unsigned int buffer_index;
+    int active = 0;
     int slot;
 
-    if (port > VITACOMPANION_TOUCH_REAR || !data)
-        return;
+    if (port > VITACOMPANION_TOUCH_REAR || !points)
+        return 0;
 
     state_lock();
     for (slot = 0; slot < VITACOMPANION_TOUCH_SLOTS; ++slot)
+    {
         points[slot] = touch_states[port][slot];
+        active |= points[slot].active;
+    }
     state_unlock();
 
-    maximum_reports = port == VITACOMPANION_TOUCH_FRONT
-        ? FRONT_TOUCH_REPORTS : REAR_TOUCH_REPORTS;
+    return active;
+}
+
+static unsigned int patch_touch_data(unsigned int port, SceTouchData *data,
+    unsigned int count)
+{
+    vitacompanion_touch_point points[VITACOMPANION_TOUCH_SLOTS];
+    unsigned int injected;
+
+    if (!snapshot_touch_points(port, points))
+        return 0;
+
+    injected = vitacompanion_patch_touch_data(port, data, count, points);
+    if (injected != 0)
+        ksceKernelPowerTick(SCE_KERNEL_POWER_TICK_DEFAULT);
+    return injected;
+}
+
+static unsigned int patch_user_touch_data(unsigned int port,
+    SceTouchData *user_data, unsigned int count)
+{
+    vitacompanion_touch_point points[VITACOMPANION_TOUCH_SLOTS];
+    SceTouchData sample;
+    unsigned int buffer_index;
+    unsigned int injected = 0;
+
+    if (!user_data || count == 0 || count > TOUCH_EXT_MAX_BUFFERS ||
+        !snapshot_touch_points(port, points))
+        return 0;
 
     for (buffer_index = 0; buffer_index < count; ++buffer_index)
     {
-        SceTouchData *current = &data[buffer_index];
+        SceTouchData *user_sample = &user_data[buffer_index];
+        unsigned int sample_injected;
 
-        for (slot = 0; slot < VITACOMPANION_TOUCH_SLOTS; ++slot)
-        {
-            SceTouchReport *report;
+        if (ksceKernelCopyFromUser(
+                &sample, user_sample, sizeof(sample)) < 0)
+            break;
 
-            if (!points[slot].active ||
-                current->reportNum >= maximum_reports)
-                continue;
+        sample_injected = vitacompanion_patch_touch_data(
+            port, &sample, 1, points);
+        if (sample_injected == 0)
+            continue;
 
-            report = &current->report[current->reportNum++];
-            report->id = (uint8_t)(SYNTHETIC_TOUCH_ID_BASE + slot);
-            report->force = 0x80;
-            report->x = (int16_t)points[slot].x;
-            report->y = (int16_t)points[slot].y;
-            report->reserved[0] = 0;
-            report->reserved[1] = 0;
-            report->reserved[2] = 0;
-            report->reserved[3] = 0;
-            report->reserved[4] = 0;
-            report->reserved[5] = 0;
-            report->reserved[6] = 0;
-            report->reserved[7] = 0;
-            report->info = 0;
-        }
+        if (ksceKernelCopyToUser(
+                user_sample, &sample, sizeof(sample)) < 0)
+            break;
+        injected += sample_injected;
     }
+
+    if (injected != 0)
+        ksceKernelPowerTick(SCE_KERNEL_POWER_TICK_DEFAULT);
+    return injected;
 }
 
 static int touch_peek_hook(unsigned int port, SceTouchData *data,
@@ -240,21 +265,78 @@ static int touch_read_region_hook(unsigned int port, SceTouchData *data,
     return result;
 }
 
+static int touch_peek_region_ext_hook(unsigned int port, SceTouchData *data,
+    unsigned int count, int region)
+{
+    int result = TAI_CONTINUE(int, touch_peek_region_ext_ref,
+        port, data, count, region);
+
+    if (result > 0)
+        patch_user_touch_data(port, data, (unsigned int)result);
+    return result;
+}
+
+static int touch_read_region_ext_hook(unsigned int port, SceTouchData *data,
+    unsigned int count, int region)
+{
+    int result = TAI_CONTINUE(int, touch_read_region_ext_ref,
+        port, data, count, region);
+
+    if (result > 0)
+        patch_user_touch_data(port, data, (unsigned int)result);
+    return result;
+}
+
+static void install_touch_ext_hooks(const char *module_name)
+{
+    static const uint32_t nids[2] = {
+        SCE_TOUCH_PEEK_REGION_EXT_NID,
+        SCE_TOUCH_READ_REGION_EXT_NID
+    };
+    static const void *functions[2] = {
+        touch_peek_region_ext_hook,
+        touch_read_region_ext_hook
+    };
+    tai_hook_ref_t *refs[2] = {
+        &touch_peek_region_ext_ref,
+        &touch_read_region_ext_ref
+    };
+    int i;
+
+    for (i = 0; i < 2; ++i)
+    {
+        touch_ext_hook_ids[i] = taiHookFunctionExportForKernel(
+            KERNEL_PID, refs[i], module_name, SCE_TOUCH_USER_LIBRARY_NID,
+            nids[i], functions[i]);
+    }
+}
+
 static void release_touch_hooks(void)
 {
-    tai_hook_ref_t *refs[] = {
+    tai_hook_ref_t *driver_refs[] = {
         &touch_peek_ref,
         &touch_peek_region_ref,
         &touch_read_ref,
         &touch_read_region_ref
     };
+    tai_hook_ref_t *ext_refs[] = {
+        &touch_peek_region_ext_ref,
+        &touch_read_region_ext_ref
+    };
     int i;
+
+    for (i = 1; i >= 0; --i)
+    {
+        if (touch_ext_hook_ids[i] >= 0)
+            taiHookReleaseForKernel(touch_ext_hook_ids[i], *ext_refs[i]);
+        touch_ext_hook_ids[i] = -1;
+    }
 
     for (i = 3; i >= 0; --i)
     {
         if (touch_hook_ids[i] >= 0)
         {
-            taiHookReleaseForKernel(touch_hook_ids[i], *refs[i]);
+            taiHookReleaseForKernel(touch_hook_ids[i], *driver_refs[i]);
             touch_hook_ids[i] = -1;
         }
     }
@@ -305,6 +387,8 @@ static int install_touch_hooks(void)
             return result;
         }
     }
+
+    install_touch_ext_hooks(module_name);
 
     return 0;
 }

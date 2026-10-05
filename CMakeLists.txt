@@ -51,7 +51,8 @@ add_library(ftpvita STATIC
         vendor/libftpvita/ftpvita_protocol.h)
 
 add_executable(vitacompanion_kernel
-        kernel/main.c)
+        kernel/main.c
+        kernel/touch_patch.c)
 
 target_compile_definitions(vitacompanion_kernel PRIVATE
   __VITA_KERNEL__
@@ -60,6 +61,8 @@ target_compile_definitions(vitacompanion_kernel PRIVATE
 target_link_libraries(vitacompanion_kernel
   taihenForKernel_stub
   SceCtrlForDriver_stub
+  SceKernelSuspendForDriver_stub
+  SceSysmemForDriver_stub
   SceThreadmgrForDriver_stub
   gcc
 )
