@@ -149,8 +149,9 @@ curl -o shot.bmp ftp://IP_TO_VITA:1337/ux0:/data/vitacompanion_screenshot.bmp
 ```
 
 The foreground application's framebuffer is captured. When no application is
-running, the shell's framebuffer is captured instead. The kernel module reads
-the framebuffer, so update both modules together.
+running, the shell's framebuffer is captured instead. The next frame the
+application shows is copied while it waits, so a game pauses for about 50 ms.
+The kernel module reads the framebuffer, so update both modules together.
  
  **Note**: Commands are defined in [`src/cmd_definitions.c`](https://github.com/robsdedude/vitacompanion/blob/master/src/cmd_definitions.c), you can add new commands there.
  

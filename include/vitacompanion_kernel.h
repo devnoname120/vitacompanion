@@ -20,8 +20,9 @@ int vitaCompanionKernelSetTouch(int port, int slot_and_active, int x, int y);
 int vitaCompanionKernelReset(void);
 /*
  * Describes the displayed frame and returns its size in bytes, which is
- * width * height * 4. If dst holds that many bytes, the whole frame is copied
- * there right after a vblank so the capture does not tear.
+ * width * height * 4. If dst holds that many bytes, the next frame the app
+ * submits is copied there without tearing, or the current frame if none is
+ * submitted within 100 ms.
  */
 int vitaCompanionKernelScreenCapture(vitacompanion_screen_info *info,
     void *dst, uint32_t dst_size);

@@ -19,6 +19,7 @@
 #define USER_BUTTON_MASK 0x0000FFFF
 #define SCREEN_MAX_WIDTH 1920
 #define SCREEN_MAX_HEIGHT 1088
+#define SCREEN_FRAME_WAIT_US (100 * 1000)
 
 typedef struct {
     int active;
@@ -41,6 +42,29 @@ static touch_state touch_states[2][VITACOMPANION_TOUCH_SLOTS];
 
 static SceUID screen_mutex = -1;
 static uint8_t screen_row[SCREEN_MAX_WIDTH * 4];
+
+static SceUID display_hook_id = -1;
+static tai_hook_ref_t display_hook_ref;
+
+/*
+ * Screenshot handshake with the display hook. The hook copies the next
+ * submitted frame before passing it on: while the app's display callback is
+ * blocked there, neither that buffer nor the one on screen can go back to the
+ * GPU, so the copy cannot tear however long it takes.
+ */
+enum {
+    CAPTURE_IDLE,
+    CAPTURE_REQUESTED,
+    CAPTURE_COPYING,
+    CAPTURE_DONE
+};
+static volatile int capture_state;
+static int capture_index;
+static SceUID capture_pid;
+static uint8_t *capture_dst;
+static SceSize capture_size;
+static SceDisplayFrameBuf capture_frame;
+static int capture_result;
 
 static SceUID touch_hook_ids[4] = {-1, -1, -1, -1};
 static tai_hook_ref_t touch_peek_ref;
@@ -380,18 +404,17 @@ int vitaCompanionKernelReset(void)
     return 0;
 }
 
-static int get_displayed_frame(SceDisplayFrameBufInfo *frame)
+static int get_displayed_frame(SceDisplayFrameBufInfo *frame, int *index)
 {
     int head = ksceDisplayGetPrimaryHead();
     int result;
-    int index;
 
     /* Same lookup as xerpi's vita-udcd-uvc: index 0, else index 1. */
-    for (index = 0; index < 2; ++index)
+    for (*index = 0; *index < 2; ++*index)
     {
         memset(frame, 0, sizeof(*frame));
         frame->size = sizeof(*frame);
-        result = ksceDisplayGetProcFrameBufInternal(-1, head, index, frame);
+        result = ksceDisplayGetProcFrameBufInternal(-1, head, *index, frame);
         if (result >= 0 && frame->paddr != 0 && frame->framebuf.base)
             return 0;
     }
@@ -399,23 +422,91 @@ static int get_displayed_frame(SceDisplayFrameBufInfo *frame)
     return result < 0 ? result : -1;
 }
 
+/* Runs in the hook, in the process that submitted the frame. */
+static int copy_submitted_frame(const SceDisplayFrameBuf *param)
+{
+    SceSize row_size = param->width * 4;
+    unsigned int row;
+    int result = 0;
+
+    if (param->pitch < param->width ||
+        row_size * param->height != capture_size)
+        return -1;
+
+    for (row = 0; row < param->height && result >= 0; ++row)
+    {
+        result = ksceKernelCopyFromUser(screen_row,
+            (const uint8_t *)param->base + (SceSize)row * param->pitch * 4,
+            row_size);
+        if (result >= 0)
+            result = ksceKernelCopyToUserProc(capture_pid,
+                capture_dst + row * row_size, screen_row, row_size);
+    }
+
+    capture_frame = *param;
+    return result;
+}
+
+/* Has the hook copy the next frame submitted to index; < 0 if none came. */
+static int capture_next_frame(int index)
+{
+    int waited;
+
+    if (display_hook_id < 0)
+        return -1;
+
+    capture_index = index;
+    __sync_synchronize();
+    capture_state = CAPTURE_REQUESTED;
+
+    for (waited = 0; waited < SCREEN_FRAME_WAIT_US &&
+        capture_state != CAPTURE_DONE; waited += 1000)
+        ksceKernelDelayThread(1000);
+
+    /* Withdraw the request, unless the hook has taken it already. */
+    if (__sync_bool_compare_and_swap(&capture_state, CAPTURE_REQUESTED,
+        CAPTURE_IDLE))
+        return -1;
+
+    while (capture_state != CAPTURE_DONE)
+        ksceKernelDelayThread(1000);
+    capture_state = CAPTURE_IDLE;
+    return capture_result;
+}
+
+/* Copies the frame as it is, when the hook did not copy one. */
+static int copy_current_frame(const SceDisplayFrameBufInfo *frame)
+{
+    SceSize row_size = frame->framebuf.width * 4;
+    unsigned int row;
+    int result = 0;
+
+    for (row = 0; row < frame->framebuf.height && result >= 0; ++row)
+    {
+        result = ksceKernelCopyFromUserProc(frame->pid, screen_row,
+            (const uint8_t *)frame->framebuf.base +
+                (SceSize)row * frame->framebuf.pitch * 4,
+            row_size);
+        if (result >= 0)
+            result = ksceKernelCopyToUser(capture_dst + row * row_size,
+                screen_row, row_size);
+    }
+
+    return result;
+}
+
 int vitaCompanionKernelScreenCapture(vitacompanion_screen_info *info,
     void *dst, uint32_t dst_size)
 {
     SceDisplayFrameBufInfo frame;
     vitacompanion_screen_info frame_info;
-    SceSize row_size;
     SceSize frame_size;
-    unsigned int row;
+    int index;
     int result;
 
     ksceKernelLockMutex(screen_mutex, 1, NULL);
 
-    /* After a flip the renderer draws into the other buffer for a frame. */
-    if (dst)
-        ksceDisplayWaitVblankStart();
-
-    result = get_displayed_frame(&frame);
+    result = get_displayed_frame(&frame, &index);
     if (result >= 0 &&
         (frame.framebuf.width == 0 ||
          frame.framebuf.width > SCREEN_MAX_WIDTH ||
@@ -426,23 +517,17 @@ int vitaCompanionKernelScreenCapture(vitacompanion_screen_info *info,
     if (result < 0)
         goto out;
 
-    row_size = frame.framebuf.width * 4;
-    frame_size = row_size * frame.framebuf.height;
+    frame_size = frame.framebuf.width * 4 * frame.framebuf.height;
 
     if (dst && dst_size >= frame_size)
     {
-        for (row = 0; row < frame.framebuf.height && result >= 0; ++row)
-        {
-            const uint8_t *src = (const uint8_t *)frame.framebuf.base +
-                (SceSize)row * frame.framebuf.pitch * 4;
-
-            result = ksceKernelCopyFromUserProc(frame.pid, screen_row, src,
-                row_size);
-            if (result >= 0)
-                result = ksceKernelCopyToUser(
-                    (uint8_t *)dst + (SceSize)row * row_size, screen_row,
-                    row_size);
-        }
+        capture_pid = ksceKernelGetProcessId();
+        capture_dst = dst;
+        capture_size = frame_size;
+        if (capture_next_frame(index) >= 0)
+            frame.framebuf = capture_frame;
+        else
+            result = copy_current_frame(&frame);
         if (result < 0)
             goto out;
     }
@@ -457,6 +542,26 @@ int vitaCompanionKernelScreenCapture(vitacompanion_screen_info *info,
 out:
     ksceKernelUnlockMutex(screen_mutex, 1);
     return result;
+}
+
+/*
+ * Sees every frame submitted to a display, the same hook point PSVshell
+ * uses. Index 0 is the foreground application's framebuffer, 1 the shell's.
+ */
+static int set_frame_buf_hook(int head, int index,
+    const SceDisplayFrameBuf *param, int sync)
+{
+    if (index == capture_index && param && param->base &&
+        head == ksceDisplayGetPrimaryHead() &&
+        __sync_bool_compare_and_swap(&capture_state, CAPTURE_REQUESTED,
+            CAPTURE_COPYING))
+    {
+        capture_result = copy_submitted_frame(param);
+        __sync_synchronize();
+        capture_state = CAPTURE_DONE;
+    }
+
+    return TAI_CONTINUE(int, display_hook_ref, head, index, param, sync);
 }
 
 int module_start(SceSize argc, const void *args)
@@ -519,6 +624,11 @@ int module_start(SceSize argc, const void *args)
         return SCE_KERNEL_START_FAILED;
     }
 
+    /* Optional: without it, screenshots copy the frame as it is. */
+    display_hook_id = taiHookFunctionExportForKernel(KERNEL_PID,
+        &display_hook_ref, "SceDisplay", 0x9FED47AC, 0x16466675,
+        set_frame_buf_hook);
+
     return SCE_KERNEL_START_SUCCESS;
 }
 
@@ -526,6 +636,12 @@ int module_stop(SceSize argc, const void *args)
 {
     (void)argc;
     (void)args;
+
+    if (display_hook_id >= 0)
+    {
+        taiHookReleaseForKernel(display_hook_id, display_hook_ref);
+        display_hook_id = -1;
+    }
 
     state_lock();
     clear_state();
