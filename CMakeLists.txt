@@ -9,7 +9,7 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
 endif()
 
 
-project(vitacompanion)
+project(vitacompanion C ASM)
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 
 set(VITACOMPANION_FTP_PORT 1337 CACHE STRING "FTP control port")
@@ -94,7 +94,8 @@ add_executable(vitacompanion
         src/version.c
         src/version.h
         src/cmd_definitions.c
-        src/cmd_definitions.h)
+        src/cmd_definitions.h
+        src/shellutil_stub.S)
 
 target_compile_definitions(ftpvita PRIVATE
   FTP_PORT=${VITACOMPANION_FTP_PORT}

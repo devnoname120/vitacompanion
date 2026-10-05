@@ -1,4 +1,5 @@
 #include "cmd_definitions.h"
+#include "cmd.h"
 #include "input.h"
 #include "nosleep.h"
 #include "parser.h"
@@ -114,7 +115,7 @@ void cmd_launch(char **arg_list, size_t arg_count, char *res_msg) {
 }
 
 void cmd_reboot(char **arg_list, size_t arg_count, char *res_msg) {
-  scePowerRequestColdReset();
+  cmd_request_reboot();
   strcpy(res_msg, "Rebooting...\n");
 }
 
