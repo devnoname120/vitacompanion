@@ -21,6 +21,9 @@ static bool validate_release(char **arg_list, size_t arg_count,
     char *res_msg);
 static bool validate_wait(char **arg_list, size_t arg_count,
     char *res_msg);
+static bool append_help_line(char **cursor, size_t *remaining,
+    size_t command_width, const char *command,
+    const char *description);
 
 const cmd_definition cmd_definitions[] = {
     {.name = "help", .description = "Display this help screen", .min_arg_count = 0, .max_arg_count = 0, .validator = NULL, .executor = &cmd_help},
@@ -50,30 +53,59 @@ const cmd_definition *cmd_get_definition(char *cmd_name) {
 }
 
 void cmd_help(char **arg_list, size_t arg_count, char *res_msg) {
-  int longest_cmd = 0;
-  size_t used = 0;
+  char *cursor = res_msg;
+  size_t remaining = CMD_RESPONSE_MAX;
+  size_t longest_cmd = strlen("Command");
+
+  (void)arg_list;
+  (void)arg_count;
+  res_msg[0] = '\0';
 
   for (size_t i = 0; i < COUNT_OF(cmd_definitions); ++i) {
-    int cmd_length = (int)strlen(cmd_definitions[i].name);
+    size_t cmd_length = strlen(cmd_definitions[i].name);
 
     if (cmd_length > longest_cmd) {
       longest_cmd = cmd_length;
     }
   }
 
-  used = (size_t)snprintf(res_msg, CMD_RESPONSE_MAX, "%-*s\t\t%s\n",
-    longest_cmd, "Command", "Description");
-  if (used >= CMD_RESPONSE_MAX)
+  if (!append_help_line(&cursor, &remaining, longest_cmd,
+      "Command", "Description"))
     return;
 
   for (size_t i = 0; i < COUNT_OF(cmd_definitions); ++i) {
-    int written = snprintf(res_msg + used, CMD_RESPONSE_MAX - used,
-      "%-*s\t\t%s\n", longest_cmd, cmd_definitions[i].name,
-      cmd_definitions[i].description);
-    if (written < 0 || (size_t)written >= CMD_RESPONSE_MAX - used)
+    if (!append_help_line(&cursor, &remaining, longest_cmd,
+        cmd_definitions[i].name, cmd_definitions[i].description))
       return;
-    used += (size_t)written;
   }
+}
+
+static bool append_help_line(char **cursor, size_t *remaining,
+    size_t command_width, const char *command,
+    const char *description)
+{
+  size_t command_length = strlen(command);
+  size_t description_length = strlen(description);
+  size_t padding = command_width > command_length ?
+    command_width - command_length : 0;
+  size_t line_length = command_length + padding + 2 +
+    description_length + 1;
+
+  if (line_length >= *remaining)
+    return false;
+
+  memcpy(*cursor, command, command_length);
+  *cursor += command_length;
+  memset(*cursor, ' ', padding);
+  *cursor += padding;
+  memcpy(*cursor, "\t\t", 2);
+  *cursor += 2;
+  memcpy(*cursor, description, description_length);
+  *cursor += description_length;
+  *(*cursor)++ = '\n';
+  **cursor = '\0';
+  *remaining -= line_length;
+  return true;
 }
 
 

@@ -8,7 +8,8 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
-def compile_and_run(source, support_sources, headers=None, include_dirs=()):
+def compile_and_run(source, support_sources, headers=None,
+                    include_dirs=(), extra_cflags=()):
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = pathlib.Path(tmpdir)
         source_path = tmp / "test.c"
@@ -25,6 +26,7 @@ def compile_and_run(source, support_sources, headers=None, include_dirs=()):
                 "-Wall",
                 "-Wextra",
                 "-Werror",
+                *extra_cflags,
                 "-I",
                 str(tmp),
                 "-I",
@@ -45,6 +47,180 @@ def compile_and_run(source, support_sources, headers=None, include_dirs=()):
 
 
 class CommandFeatureTests(unittest.TestCase):
+    def test_help_formats_columns_without_string_width_support(self):
+        compile_and_run(
+            r"""
+            #include "cmd_definitions.h"
+
+            #include <stdarg.h>
+            #include <stdbool.h>
+            #include <stdint.h>
+            #include <stdio.h>
+            #include <string.h>
+            #include <vitacompanion_input.h>
+
+            #ifdef snprintf
+            #undef snprintf
+            #endif
+
+            volatile int run = 1;
+            volatile int net_connected = 1;
+
+            int snprintf(char *buffer, size_t capacity,
+                const char *format, ...)
+            {
+                const char *command;
+                const char *description;
+                size_t command_length;
+                size_t description_length;
+                size_t actual_length;
+                va_list arguments;
+
+                if (strcmp(format, "%-*s\t\t%s\n") != 0)
+                    return -1;
+
+                va_start(arguments, format);
+                (void)va_arg(arguments, int);
+                command = va_arg(arguments, const char *);
+                description = va_arg(arguments, const char *);
+                va_end(arguments);
+
+                command_length = strlen(command);
+                description_length = strlen(description);
+                actual_length = command_length + 2 +
+                    description_length + 1;
+
+                if (capacity > actual_length)
+                {
+                    memcpy(buffer, command, command_length);
+                    memcpy(buffer + command_length, "\t\t", 2);
+                    memcpy(buffer + command_length + 2, description,
+                        description_length);
+                    buffer[actual_length - 1] = '\n';
+                    buffer[actual_length] = '\0';
+                }
+
+                return (int)actual_length;
+            }
+
+            int sceAppMgrDestroyOtherApp(void) { return 0; }
+            int sceAppMgrDestroyAppByName(const char *name)
+            {
+                (void)name;
+                return 0;
+            }
+            int sceAppMgrLaunchAppByUri(int flags, const char *uri)
+            {
+                (void)flags;
+                (void)uri;
+                return 0;
+            }
+            int scePowerRequestDisplayOn(void) { return 0; }
+            int scePowerRequestDisplayOff(void) { return 0; }
+            int sceKernelDelayThread(unsigned int delay)
+            {
+                (void)delay;
+                return 0;
+            }
+            void nosleep_set_enabled(bool enabled) { (void)enabled; }
+            bool nosleep_is_enabled(void) { return false; }
+            bool input_is_ready(void) { return false; }
+            int input_apply(const vitacompanion_input_action *action)
+            {
+                (void)action;
+                return 0;
+            }
+            int vitacompanion_parse_press(char **arguments,
+                size_t argument_count, vitacompanion_input_action *action)
+            {
+                (void)arguments;
+                (void)argument_count;
+                (void)action;
+                return 0;
+            }
+            int vitacompanion_parse_release(char **arguments,
+                size_t argument_count, vitacompanion_input_action *action)
+            {
+                (void)arguments;
+                (void)argument_count;
+                (void)action;
+                return 0;
+            }
+            const char *vitacompanion_input_parse_error(int result)
+            {
+                (void)result;
+                return "";
+            }
+            bool parse_wait_duration_ms(const char *value,
+                uint32_t *duration_ms)
+            {
+                (void)value;
+                (void)duration_ms;
+                return false;
+            }
+            int promote_directory(const char *path)
+            {
+                (void)path;
+                return 0;
+            }
+            int reboot_request(void) { return 0; }
+            int version_format(char *buffer, size_t capacity)
+            {
+                (void)buffer;
+                (void)capacity;
+                return 0;
+            }
+
+            int main(void)
+            {
+                char response[2048] = {0};
+                const char expected[] =
+                    "Command\t\tDescription\n"
+                    "help   \t\tDisplay this help screen\n"
+                    "launch \t\tLaunch an app by Title ID\n"
+                    "nosleep\t\tControl automatic suspend prevention\n"
+                    "press  \t\tPress or position a synthetic input\n"
+                    "promote\t\tPromote an extracted app directory\n"
+                    "quit   \t\tQuit an app by Title ID, or all apps\n"
+                    "reboot \t\tReboot the console\n"
+                    "release\t\tRelease a synthetic input\n"
+                    "screen \t\tTurn the screen on or off\n"
+                    "version\t\tDisplay the Vita Companion version\n"
+                    "wait   \t\tWait for a duration such as 100ms or 3s\n";
+
+                cmd_help(0, 0, response);
+                return strcmp(response, expected) == 0 ? 0 : 1;
+            }
+            """,
+            ("src/cmd_definitions.c",),
+            {
+                "stdio.h": r"""
+                    #ifndef TEST_STDIO_H
+                    #define TEST_STDIO_H
+                    #include <stddef.h>
+                    int snprintf(char *buffer, size_t capacity,
+                        const char *format, ...);
+                    #endif
+                """,
+                "vitasdk.h": r"""
+                    #ifndef TEST_VITASDK_H
+                    #define TEST_VITASDK_H
+                    int sceAppMgrDestroyOtherApp(void);
+                    int sceAppMgrDestroyAppByName(const char *name);
+                    int sceAppMgrLaunchAppByUri(int flags,
+                        const char *uri);
+                    int scePowerRequestDisplayOn(void);
+                    int scePowerRequestDisplayOff(void);
+                    int sceKernelDelayThread(unsigned int delay);
+                    #endif
+                """,
+            },
+            extra_cflags=(
+                "-Wno-unused-parameter",
+                "-fno-builtin-snprintf",
+            ),
+        )
+
     def test_reboot_prefers_shell_shutdown_with_forced_fallback(self):
         command_source = (ROOT / "src" / "cmd_definitions.c").read_text()
         reboot_start = command_source.index("void cmd_reboot")
