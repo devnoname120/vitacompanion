@@ -58,18 +58,20 @@ void cmd_help(char **arg_list, size_t arg_count, char *res_msg) {
     }
   }
 
-  used = (size_t)snprintf(res_msg, CMD_RESPONSE_MAX, "%-*s\t\t%s\n",
+  /*
+   * The Vita's snprintf leaves out the padding of "%-*s" but still counts it
+   * in its return value, so measure what was actually written.
+   */
+  snprintf(res_msg, CMD_RESPONSE_MAX, "%-*s\t\t%s\n",
     longest_cmd, "Command", "Description");
-  if (used >= CMD_RESPONSE_MAX)
-    return;
 
   for (size_t i = 0; i < COUNT_OF(cmd_definitions); ++i) {
-    int written = snprintf(res_msg + used, CMD_RESPONSE_MAX - used,
+    used = strlen(res_msg);
+    if (used >= CMD_RESPONSE_MAX - 1)
+      return;
+    snprintf(res_msg + used, CMD_RESPONSE_MAX - used,
       "%-*s\t\t%s\n", longest_cmd, cmd_definitions[i].name,
       cmd_definitions[i].description);
-    if (written < 0 || (size_t)written >= CMD_RESPONSE_MAX - used)
-      return;
-    used += (size_t)written;
   }
 }
 
