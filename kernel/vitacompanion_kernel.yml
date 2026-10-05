@@ -15,3 +15,4 @@ vitacompanion_kernel:
         - vitaCompanionKernelSetAnalog
         - vitaCompanionKernelSetTouch
         - vitaCompanionKernelReset
+        - vitaCompanionKernelScreenCapture

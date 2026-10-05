@@ -3,9 +3,12 @@
 
 #include <psp2/touch.h>
 #include <psp2kern/ctrl.h>
+#include <psp2kern/display.h>
+#include <psp2kern/kernel/sysmem/data_transfers.h>
 #include <psp2kern/kernel/modulemgr.h>
 #include <psp2kern/kernel/threadmgr.h>
 #include <stdint.h>
+#include <string.h>
 #include <taihen.h>
 
 #define CTRL_REFRESH_US (8 * 1000)
@@ -14,6 +17,8 @@
 #define REAR_TOUCH_REPORTS 4
 #define SYNTHETIC_TOUCH_ID_BASE 0x70
 #define USER_BUTTON_MASK 0x0000FFFF
+#define SCREEN_MAX_WIDTH 1920
+#define SCREEN_MAX_HEIGHT 1088
 
 typedef struct {
     int active;
@@ -33,6 +38,9 @@ static volatile int ctrl_thread_running;
 static uint32_t button_state;
 static analog_state analog_states[2];
 static touch_state touch_states[2][VITACOMPANION_TOUCH_SLOTS];
+
+static SceUID screen_mutex = -1;
+static uint8_t screen_row[SCREEN_MAX_WIDTH * 4];
 
 static SceUID touch_hook_ids[4] = {-1, -1, -1, -1};
 static tai_hook_ref_t touch_peek_ref;
@@ -372,6 +380,85 @@ int vitaCompanionKernelReset(void)
     return 0;
 }
 
+static int get_displayed_frame(SceDisplayFrameBufInfo *frame)
+{
+    int head = ksceDisplayGetPrimaryHead();
+    int result;
+    int index;
+
+    /* Same lookup as xerpi's vita-udcd-uvc: index 0, else index 1. */
+    for (index = 0; index < 2; ++index)
+    {
+        memset(frame, 0, sizeof(*frame));
+        frame->size = sizeof(*frame);
+        result = ksceDisplayGetProcFrameBufInternal(-1, head, index, frame);
+        if (result >= 0 && frame->paddr != 0 && frame->framebuf.base)
+            return 0;
+    }
+
+    return result < 0 ? result : -1;
+}
+
+int vitaCompanionKernelScreenCapture(vitacompanion_screen_info *info,
+    void *dst, uint32_t dst_size)
+{
+    SceDisplayFrameBufInfo frame;
+    vitacompanion_screen_info frame_info;
+    SceSize row_size;
+    SceSize frame_size;
+    unsigned int row;
+    int result;
+
+    ksceKernelLockMutex(screen_mutex, 1, NULL);
+
+    /* After a flip the renderer draws into the other buffer for a frame. */
+    if (dst)
+        ksceDisplayWaitVblankStart();
+
+    result = get_displayed_frame(&frame);
+    if (result >= 0 &&
+        (frame.framebuf.width == 0 ||
+         frame.framebuf.width > SCREEN_MAX_WIDTH ||
+         frame.framebuf.height == 0 ||
+         frame.framebuf.height > SCREEN_MAX_HEIGHT ||
+         frame.framebuf.pitch < frame.framebuf.width))
+        result = -1;
+    if (result < 0)
+        goto out;
+
+    row_size = frame.framebuf.width * 4;
+    frame_size = row_size * frame.framebuf.height;
+
+    if (dst && dst_size >= frame_size)
+    {
+        for (row = 0; row < frame.framebuf.height && result >= 0; ++row)
+        {
+            const uint8_t *src = (const uint8_t *)frame.framebuf.base +
+                (SceSize)row * frame.framebuf.pitch * 4;
+
+            result = ksceKernelCopyFromUserProc(frame.pid, screen_row, src,
+                row_size);
+            if (result >= 0)
+                result = ksceKernelCopyToUser(
+                    (uint8_t *)dst + (SceSize)row * row_size, screen_row,
+                    row_size);
+        }
+        if (result < 0)
+            goto out;
+    }
+
+    frame_info.width = frame.framebuf.width;
+    frame_info.height = frame.framebuf.height;
+    frame_info.pixelformat = frame.framebuf.pixelformat;
+    result = ksceKernelCopyToUser(info, &frame_info, sizeof(frame_info));
+    if (result >= 0)
+        result = (int)frame_size;
+
+out:
+    ksceKernelUnlockMutex(screen_mutex, 1);
+    return result;
+}
+
 int module_start(SceSize argc, const void *args)
 {
     int result;
@@ -385,9 +472,20 @@ int module_start(SceSize argc, const void *args)
     if (state_mutex < 0)
         return SCE_KERNEL_START_FAILED;
 
+    screen_mutex = ksceKernelCreateMutex(
+        "vitacompanion_screen_mutex", 0, 0, NULL);
+    if (screen_mutex < 0)
+    {
+        ksceKernelDeleteMutex(state_mutex);
+        state_mutex = -1;
+        return SCE_KERNEL_START_FAILED;
+    }
+
     result = install_touch_hooks();
     if (result < 0)
     {
+        ksceKernelDeleteMutex(screen_mutex);
+        screen_mutex = -1;
         ksceKernelDeleteMutex(state_mutex);
         state_mutex = -1;
         return SCE_KERNEL_START_FAILED;
@@ -399,6 +497,8 @@ int module_start(SceSize argc, const void *args)
     if (ctrl_thread_id < 0)
     {
         release_touch_hooks();
+        ksceKernelDeleteMutex(screen_mutex);
+        screen_mutex = -1;
         ksceKernelDeleteMutex(state_mutex);
         state_mutex = -1;
         return SCE_KERNEL_START_FAILED;
@@ -412,6 +512,8 @@ int module_start(SceSize argc, const void *args)
         ksceKernelDeleteThread(ctrl_thread_id);
         ctrl_thread_id = -1;
         release_touch_hooks();
+        ksceKernelDeleteMutex(screen_mutex);
+        screen_mutex = -1;
         ksceKernelDeleteMutex(state_mutex);
         state_mutex = -1;
         return SCE_KERNEL_START_FAILED;
@@ -438,6 +540,12 @@ int module_stop(SceSize argc, const void *args)
 
     release_touch_hooks();
     reset_ctrl_emulation();
+
+    if (screen_mutex >= 0)
+    {
+        ksceKernelDeleteMutex(screen_mutex);
+        screen_mutex = -1;
+    }
 
     if (state_mutex >= 0)
     {
