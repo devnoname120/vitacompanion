@@ -20,6 +20,11 @@
 #define CMD_RES_MAX (8192)
 #define CMD_IO_TIMEOUT_US (15 * 1000 * 1000)
 #define CMD_START_TIMEOUT_MS 5000
+/* Plain reset if the shell has not restarted the console by then. */
+#define CMD_REBOOT_FALLBACK_US (15 * 1000 * 1000)
+
+/* SceShell's own restart; see src/shellutil_stub.S. */
+int sceShellUtilRequestColdReset(int flags);
 
 extern volatile int run;
 extern volatile int all_is_up;
@@ -31,6 +36,7 @@ static int loader_sockfd = -1;
 static int loader_client_sockfd = -1;
 static volatile int loader_stopping;
 static volatile int loader_start_state;
+static volatile int reboot_requested;
 
 typedef struct {
     const cmd_definition* definition;
@@ -234,6 +240,20 @@ int cmd_thread(unsigned int args, void* argp)
             loader_client_sockfd = -1;
             sceKernelUnlockMutex(loader_client_mtx, 1);
             sceNetSocketClose(client_sockfd);
+
+            if (reboot_requested)
+            {
+                /*
+                 * Restart now that the reply has been sent. SceShell's own
+                 * restart disconnects Wi-Fi first; after a plain
+                 * scePowerRequestColdReset the Vita can drop off Wi-Fi
+                 * shortly after boot and not reconnect.
+                 */
+                sceShellUtilRequestColdReset(0);
+                sceKernelDelayThread(CMD_REBOOT_FALLBACK_US);
+                scePowerRequestColdReset();
+                break;
+            }
         }
         else if (loader_stopping)
         {
@@ -313,6 +333,12 @@ int cmd_start()
     }
 
     return 0;
+}
+
+/* Reboots once the current response has been sent. */
+void cmd_request_reboot()
+{
+    reboot_requested = 1;
 }
 
 void cmd_end()
