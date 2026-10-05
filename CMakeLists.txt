@@ -34,6 +34,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fno-rtti -fno-exceptions")
 include_directories(
   ${CMAKE_SOURCE_DIR}/include
   ${CMAKE_SOURCE_DIR}/vendor/libftpvita
+  ${CMAKE_SOURCE_DIR}/vendor/miniz
 )
 
 link_directories(
@@ -49,6 +50,15 @@ add_library(ftpvita STATIC
         vendor/libftpvita/ftpvita_path.h
         vendor/libftpvita/ftpvita_protocol.c
         vendor/libftpvita/ftpvita_protocol.h)
+
+add_library(miniz_tinfl STATIC
+        vendor/miniz/miniz_tinfl.c
+        vendor/miniz/miniz_tinfl.h)
+
+target_compile_definitions(miniz_tinfl PRIVATE
+  NDEBUG
+  MINIZ_NO_MALLOC
+)
 
 add_executable(vitacompanion_kernel
         kernel/main.c)
@@ -93,6 +103,12 @@ add_executable(vitacompanion
         src/input_parse.c
         src/version.c
         src/version.h
+        src/vpk_format.c
+        src/vpk_format.h
+        src/vpk_package.c
+        src/vpk_package.h
+        src/vpk_install.c
+        src/vpk_install.h
         src/cmd_definitions.c
         src/cmd_definitions.h)
 
@@ -108,12 +124,14 @@ add_dependencies(vitacompanion vitacompanion_kernel_stubs)
 target_link_libraries(vitacompanion
   taipool
   ftpvita
+  miniz_tinfl
   k
   gcc
   SceLibKernel_stub_weak
   SceNet_stub_weak
   SceNetCtl_stub_weak
   SceSysmodule_stub_weak
+  SceSysmem_stub_weak
   SceKernelThreadMgr_stub_weak
   SceIofilemgr_stub_weak
   SceRtc_stub_weak
@@ -121,6 +139,7 @@ target_link_libraries(vitacompanion
   SceKernelModulemgr_stub
   SceProcessmgr_stub_weak
   ScePower_stub
+  ScePromoterUtil_stub_weak
   ${CMAKE_CURRENT_BINARY_DIR}/libvitacompanion_kernel_stub.a
 )
 
