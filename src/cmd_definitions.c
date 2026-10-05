@@ -2,6 +2,7 @@
 #include "input.h"
 #include "nosleep.h"
 #include "parser.h"
+#include "reboot.h"
 #include "version.h"
 #include <stdarg.h>
 #include <stdbool.h>
@@ -114,7 +115,10 @@ void cmd_launch(char **arg_list, size_t arg_count, char *res_msg) {
 }
 
 void cmd_reboot(char **arg_list, size_t arg_count, char *res_msg) {
-  scePowerRequestColdReset();
+  (void)arg_list;
+  (void)arg_count;
+
+  reboot_request();
   strcpy(res_msg, "Rebooting...\n");
 }
 

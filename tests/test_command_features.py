@@ -8,12 +8,16 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
-def compile_and_run(source, support_sources):
+def compile_and_run(source, support_sources, headers=None):
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = pathlib.Path(tmpdir)
         source_path = tmp / "test.c"
         executable_path = tmp / "test"
         source_path.write_text(textwrap.dedent(source))
+        for relative_path, contents in (headers or {}).items():
+            header_path = tmp / relative_path
+            header_path.parent.mkdir(parents=True, exist_ok=True)
+            header_path.write_text(textwrap.dedent(contents))
         subprocess.run(
             [
                 "cc",
@@ -21,6 +25,8 @@ def compile_and_run(source, support_sources):
                 "-Wall",
                 "-Wextra",
                 "-Werror",
+                "-I",
+                str(tmp),
                 "-I",
                 str(ROOT / "src"),
                 "-I",
@@ -37,6 +43,224 @@ def compile_and_run(source, support_sources):
 
 
 class CommandFeatureTests(unittest.TestCase):
+    def test_reboot_prefers_shell_shutdown_with_forced_fallback(self):
+        command_source = (ROOT / "src" / "cmd_definitions.c").read_text()
+        reboot_start = command_source.index("void cmd_reboot")
+        reboot_end = command_source.index("void cmd_screen")
+        reboot_handler = command_source[reboot_start:reboot_end]
+        cmake_source = (ROOT / "CMakeLists.txt").read_text()
+
+        self.assertIn("reboot_request();", reboot_handler)
+        self.assertNotIn("scePowerRequestColdReset", reboot_handler)
+        self.assertIn("src/reboot.c", cmake_source)
+        self.assertIn("taihen_stub", cmake_source)
+
+        compile_and_run(
+            r"""
+            #include "reboot.h"
+
+            #include <psp2/kernel/threadmgr.h>
+            #include <stdint.h>
+            #include <string.h>
+
+            #define SHELL_UTIL_LIBRARY_NID 0xD2B1C8AE
+            #define SHELL_REQUEST_COLD_RESET_NID 0x636544FB
+            #define WATCHDOG_DELAY_US (15 * 1000 * 1000)
+
+            static SceKernelThreadEntry watchdog_entry;
+            static int call_index;
+            static int create_order;
+            static int start_order;
+            static int resolve_order;
+            static int shell_order;
+            static int forced_order;
+            static int create_result;
+            static int start_result;
+            static int resolve_result;
+            static int shell_result;
+            static int forced_result;
+            static int delete_count;
+            static int delay_us;
+            static int exit_delete_count;
+            static int shell_argument;
+
+            static int shell_request_cold_reset(int argument)
+            {
+                shell_order = ++call_index;
+                shell_argument = argument;
+                return shell_result;
+            }
+
+            static void reset_state(void)
+            {
+                watchdog_entry = 0;
+                call_index = 0;
+                create_order = 0;
+                start_order = 0;
+                resolve_order = 0;
+                shell_order = 0;
+                forced_order = 0;
+                create_result = 7;
+                start_result = 0;
+                resolve_result = 0;
+                shell_result = 0;
+                forced_result = -77;
+                delete_count = 0;
+                delay_us = 0;
+                exit_delete_count = 0;
+                shell_argument = -1;
+            }
+
+            SceUID sceKernelCreateThread(const char *name,
+                SceKernelThreadEntry entry, int priority,
+                unsigned int stack_size, unsigned int attributes,
+                int cpu_affinity_mask, const void *option)
+            {
+                (void)priority;
+                (void)stack_size;
+                (void)attributes;
+                (void)cpu_affinity_mask;
+                (void)option;
+                if (strcmp(name, "vitacompanion_reboot_watchdog") != 0)
+                    return -1;
+                create_order = ++call_index;
+                watchdog_entry = entry;
+                return create_result;
+            }
+
+            int sceKernelStartThread(SceUID thread_id,
+                unsigned int argument_size, const void *arguments)
+            {
+                (void)thread_id;
+                (void)argument_size;
+                (void)arguments;
+                start_order = ++call_index;
+                return start_result;
+            }
+
+            int sceKernelDeleteThread(SceUID thread_id)
+            {
+                (void)thread_id;
+                ++delete_count;
+                return 0;
+            }
+
+            int sceKernelDelayThread(unsigned int delay)
+            {
+                delay_us = (int)delay;
+                return 0;
+            }
+
+            int sceKernelExitDeleteThread(int status)
+            {
+                ++exit_delete_count;
+                return status;
+            }
+
+            int scePowerRequestColdReset(void)
+            {
+                forced_order = ++call_index;
+                return forced_result;
+            }
+
+            int taiGetModuleExportFunc(const char *module_name,
+                uint32_t library_nid, uint32_t function_nid,
+                uintptr_t *function)
+            {
+                resolve_order = ++call_index;
+                if (strcmp(module_name, "SceShellSvc") != 0 ||
+                    library_nid != SHELL_UTIL_LIBRARY_NID ||
+                    function_nid != SHELL_REQUEST_COLD_RESET_NID)
+                    return -2;
+                if (resolve_result < 0)
+                    return resolve_result;
+                *function = (uintptr_t)shell_request_cold_reset;
+                return 0;
+            }
+
+            int main(void)
+            {
+                reset_state();
+                if (reboot_request() != 0 ||
+                    create_order != 1 || start_order != 2 ||
+                    resolve_order != 3 || shell_order != 4 ||
+                    forced_order != 0 || shell_argument != 0 ||
+                    watchdog_entry == 0)
+                    return 1;
+
+                if (watchdog_entry(0, 0) != 0 ||
+                    delay_us != WATCHDOG_DELAY_US ||
+                    forced_order != 5 || exit_delete_count != 1)
+                    return 2;
+
+                reset_state();
+                resolve_result = -3;
+                if (reboot_request() != forced_result ||
+                    shell_order != 0 || forced_order != 4)
+                    return 3;
+
+                reset_state();
+                shell_result = -4;
+                if (reboot_request() != forced_result ||
+                    shell_order != 4 || forced_order != 5)
+                    return 4;
+
+                reset_state();
+                create_result = -5;
+                if (reboot_request() != forced_result ||
+                    start_order != 0 || resolve_order != 0 ||
+                    forced_order != 2)
+                    return 5;
+
+                reset_state();
+                start_result = -6;
+                if (reboot_request() != forced_result ||
+                    delete_count != 1 || resolve_order != 0 ||
+                    forced_order != 3)
+                    return 6;
+
+                return 0;
+            }
+            """,
+            ("src/reboot.c",),
+            {
+                "psp2/kernel/threadmgr.h": r"""
+                    #ifndef TEST_THREADMGR_H
+                    #define TEST_THREADMGR_H
+                    typedef int SceUID;
+                    typedef int (*SceKernelThreadEntry)(
+                        unsigned int, void *);
+                    SceUID sceKernelCreateThread(const char *name,
+                        SceKernelThreadEntry entry, int priority,
+                        unsigned int stack_size,
+                        unsigned int attributes,
+                        int cpu_affinity_mask, const void *option);
+                    int sceKernelStartThread(SceUID thread_id,
+                        unsigned int argument_size,
+                        const void *arguments);
+                    int sceKernelDeleteThread(SceUID thread_id);
+                    int sceKernelDelayThread(unsigned int delay);
+                    int sceKernelExitDeleteThread(int status);
+                    #endif
+                """,
+                "psp2/power.h": r"""
+                    #ifndef TEST_POWER_H
+                    #define TEST_POWER_H
+                    int scePowerRequestColdReset(void);
+                    #endif
+                """,
+                "taihen.h": r"""
+                    #ifndef TEST_TAIHEN_H
+                    #define TEST_TAIHEN_H
+                    #include <stdint.h>
+                    int taiGetModuleExportFunc(const char *module_name,
+                        uint32_t library_nid, uint32_t function_nid,
+                        uintptr_t *function);
+                    #endif
+                """,
+            },
+        )
+
     def test_command_chains_accept_optional_trailing_semicolons(self):
         compile_and_run(
             r"""

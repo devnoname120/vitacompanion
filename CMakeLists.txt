@@ -88,6 +88,8 @@ add_executable(vitacompanion
         src/nosleep.h
         src/parser.c
         src/parser.h
+        src/reboot.c
+        src/reboot.h
         src/input.c
         src/input.h
         src/input_parse.c
@@ -106,6 +108,7 @@ target_compile_definitions(vitacompanion PRIVATE
 add_dependencies(vitacompanion vitacompanion_kernel_stubs)
 
 target_link_libraries(vitacompanion
+  taihen_stub
   taipool
   ftpvita
   k
