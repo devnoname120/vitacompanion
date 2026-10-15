@@ -43,7 +43,7 @@ def compile_and_run(source, support_sources, headers):
 
 
 class PromoteTests(unittest.TestCase):
-    def test_directory_preparation_and_promoter_lifecycle(self):
+    def test_directory_preparation_and_lazy_promoter_binding(self):
         compile_and_run(
             r"""
             #include "promote.h"
@@ -51,11 +51,11 @@ class PromoteTests(unittest.TestCase):
 
             #include <psp2/io/fcntl.h>
             #include <psp2/io/stat.h>
-            #include <psp2/promoterutil.h>
             #include <psp2/sysmodule.h>
             #include <stdint.h>
             #include <stdio.h>
             #include <string.h>
+            #include <taihen.h>
 
             #define ROOT_PATH "ux0:data/promote-test"
             #define PARAM_PATH ROOT_PATH "/sce_sys/param.sfo"
@@ -90,9 +90,15 @@ class PromoteTests(unittest.TestCase):
             static int head_exists;
             static int package_exists;
             static int module_calls;
+            static int promoter_query_result;
             static int promoter_load_result;
             static int promoter_init_result;
             static int promoter_result;
+            static int promoter_state;
+            static int promoter_state_result;
+            static int promoter_state_after_init;
+            static uint32_t resolve_error_nid;
+            static uint32_t resolve_null_nid;
             static char sequence[32];
             static size_t sequence_length;
 
@@ -115,9 +121,15 @@ class PromoteTests(unittest.TestCase):
                 head_exists = 0;
                 package_exists = 0;
                 module_calls = 0;
+                promoter_query_result = (int)0x805A1001u;
                 promoter_load_result = 0;
                 promoter_init_result = 0;
                 promoter_result = 0;
+                promoter_state = 0;
+                promoter_state_result = 0;
+                promoter_state_after_init = 0;
+                resolve_error_nid = 0;
+                resolve_null_nid = 0;
                 sequence_length = 0;
             }
 
@@ -284,31 +296,13 @@ class PromoteTests(unittest.TestCase):
                 return strcmp(path, HEAD_TEMP_PATH) == 0 ? 0 : -10;
             }
 
-            int sceSysmoduleLoadModuleInternalWithArg(
-                SceSysmoduleInternalModuleId id, SceSize args,
-                void *argp, const SceSysmoduleOpt *option)
-            {
-                const uint32_t *values = argp;
-
-                ++module_calls;
-                append_sequence('P');
-                if (id != SCE_SYSMODULE_INTERNAL_PAF ||
-                    args != 6 * sizeof(uint32_t) || !values || !option ||
-                    values[0] != 0x180000 || values[3] != 1 ||
-                    option->flags != (int)sizeof(*option) ||
-                    !option->result)
-                    return -11;
-                return 0;
-            }
-
-            int sceSysmoduleUnloadModuleInternalWithArg(
-                SceSysmoduleInternalModuleId id, SceSize args,
-                void *argp, const SceSysmoduleOpt *option)
+            int sceSysmoduleIsLoadedInternal(
+                SceSysmoduleInternalModuleId id)
             {
                 ++module_calls;
                 append_sequence('Q');
-                return id == SCE_SYSMODULE_INTERNAL_PAF && args == 0 &&
-                    !argp && option ? 0 : -12;
+                return id == SCE_SYSMODULE_INTERNAL_PROMOTER_UTIL
+                    ? promoter_query_result : -12;
             }
 
             int sceSysmoduleLoadModuleInternal(
@@ -321,22 +315,22 @@ class PromoteTests(unittest.TestCase):
                 return promoter_load_result;
             }
 
-            int sceSysmoduleUnloadModuleInternal(
-                SceSysmoduleInternalModuleId id)
-            {
-                ++module_calls;
-                append_sequence('U');
-                return id == SCE_SYSMODULE_INTERNAL_PROMOTER_UTIL
-                    ? 0 : -14;
-            }
-
-            int scePromoterUtilityInit(void)
+            static int mock_promoter_init(void)
             {
                 append_sequence('I');
+                if (promoter_init_result == 0)
+                    promoter_state = promoter_state_after_init;
                 return promoter_init_result;
             }
 
-            int scePromoterUtilityPromotePkgWithRif(
+            static int mock_promoter_state(int *state)
+            {
+                append_sequence('S');
+                *state = promoter_state;
+                return promoter_state_result;
+            }
+
+            static int mock_promoter_promote(
                 const char *path, int sync)
             {
                 append_sequence('R');
@@ -345,9 +339,37 @@ class PromoteTests(unittest.TestCase):
                 return promoter_result;
             }
 
-            int scePromoterUtilityExit(void)
+            int taiGetModuleExportFunc(const char *name,
+                uint32_t library_nid, uint32_t function_nid,
+                uintptr_t *address)
             {
-                append_sequence('E');
+                ++module_calls;
+                if (strcmp(name, "ScePromoterUtil") != 0 ||
+                    library_nid != 0x31F237B6)
+                    return -16;
+
+                switch (function_nid)
+                {
+                case 0x93451536:
+                    append_sequence('A');
+                    *address = (uintptr_t)mock_promoter_init;
+                    break;
+                case 0xABEC74D2:
+                    append_sequence('B');
+                    *address = (uintptr_t)mock_promoter_state;
+                    break;
+                case 0x86641BC6:
+                    append_sequence('C');
+                    *address = (uintptr_t)mock_promoter_promote;
+                    break;
+                default:
+                    return -17;
+                }
+
+                if (function_nid == resolve_error_nid)
+                    return -96;
+                if (function_nid == resolve_null_nid)
+                    *address = 0;
                 return 0;
             }
 
@@ -402,15 +424,83 @@ class PromoteTests(unittest.TestCase):
                 reset_state();
                 build_sfo("TEST00001", 0);
                 head_exists = 1;
+                promoter_query_result = -91;
                 result = promote_directory(ROOT_PATH);
-                if (result != 0 || strcmp(sequence, "PLIREUQ") != 0 ||
+                if (result != -91 || strcmp(sequence, "Q") != 0)
+                    return 11;
+
+                reset_state();
+                build_sfo("TEST00001", 0);
+                head_exists = 1;
+                promoter_load_result = -97;
+                result = promote_directory(ROOT_PATH);
+                if (result != -97 || strcmp(sequence, "QL") != 0)
+                    return 10;
+
+                reset_state();
+                build_sfo("TEST00001", 0);
+                head_exists = 1;
+                resolve_error_nid = 0x86641BC6;
+                result = promote_directory(ROOT_PATH);
+                if (result != -96 || strcmp(sequence, "QLABC") != 0)
+                    return 12;
+
+                reset_state();
+                build_sfo("TEST00001", 0);
+                head_exists = 1;
+                promoter_query_result = 0;
+                resolve_null_nid = 0xABEC74D2;
+                result = promote_directory(ROOT_PATH);
+                if (result != VITACOMPANION_PROMOTE_ERROR_API_UNAVAILABLE ||
+                    strcmp(sequence, "QAB") != 0)
+                    return 13;
+
+                reset_state();
+                build_sfo("TEST00001", 0);
+                head_exists = 1;
+                promoter_state_result = -95;
+                result = promote_directory(ROOT_PATH);
+                if (result != -95 || strcmp(sequence, "QLABCS") != 0)
+                    return 14;
+
+                reset_state();
+                build_sfo("TEST00001", 0);
+                head_exists = 1;
+                promoter_state = 1;
+                result = promote_directory(ROOT_PATH);
+                if (result != VITACOMPANION_PROMOTE_ERROR_BUSY ||
+                    strcmp(sequence, "S") != 0)
+                    return 15;
+
+                reset_state();
+                build_sfo("TEST00001", 0);
+                head_exists = 1;
+                promoter_init_result = -98;
+                result = promote_directory(ROOT_PATH);
+                if (result != -98 || strcmp(sequence, "SI") != 0)
+                    return 9;
+
+                reset_state();
+                build_sfo("TEST00001", 0);
+                head_exists = 1;
+                promoter_state_after_init = 1;
+                result = promote_directory(ROOT_PATH);
+                if (result != VITACOMPANION_PROMOTE_ERROR_BUSY ||
+                    strcmp(sequence, "SIS") != 0)
+                    return 16;
+
+                reset_state();
+                build_sfo("TEST00001", 0);
+                head_exists = 1;
+                result = promote_directory(ROOT_PATH);
+                if (result != 0 || strcmp(sequence, "SR") != 0 ||
                     written_head_size != 0)
                     return 3;
 
                 reset_state();
                 build_sfo("TEST00001", 0);
                 result = promote_directory(ROOT_PATH);
-                if (result != 0 || strcmp(sequence, "PLIREUQ") != 0 ||
+                if (result != 0 || strcmp(sequence, "SR") != 0 ||
                     written_head_size != 1072 || !head_exists ||
                     memcmp(written_head + 0x30,
                         "EP9000-TEST00001_00-0000000000000000", 36) != 0 ||
@@ -451,24 +541,15 @@ class PromoteTests(unittest.TestCase):
                 head_exists = 1;
                 promoter_result = -99;
                 result = promote_directory(ROOT_PATH);
-                if (result != -99 || strcmp(sequence, "PLIREUQ") != 0)
+                if (result != -99 || strcmp(sequence, "SR") != 0)
                     return 8;
 
                 reset_state();
                 build_sfo("TEST00001", 0);
                 head_exists = 1;
-                promoter_init_result = -98;
                 result = promote_directory(ROOT_PATH);
-                if (result != -98 || strcmp(sequence, "PLIUQ") != 0)
-                    return 9;
-
-                reset_state();
-                build_sfo("TEST00001", 0);
-                head_exists = 1;
-                promoter_load_result = -97;
-                result = promote_directory(ROOT_PATH);
-                if (result != -97 || strcmp(sequence, "PLQ") != 0)
-                    return 10;
+                if (result != 0 || strcmp(sequence, "SR") != 0)
+                    return 17;
 
                 return 0;
             }
@@ -515,42 +596,24 @@ class PromoteTests(unittest.TestCase):
                     int sceIoMkdir(const char *, SceMode);
                     #endif
                 """,
-                "psp2/promoterutil.h": r"""
-                    #ifndef TEST_PSP2_PROMOTERUTIL_H
-                    #define TEST_PSP2_PROMOTERUTIL_H
-                    int scePromoterUtilityInit(void);
-                    int scePromoterUtilityExit(void);
-                    int scePromoterUtilityPromotePkgWithRif(
-                        const char *, int);
+                "taihen.h": r"""
+                    #ifndef TEST_TAIHEN_H
+                    #define TEST_TAIHEN_H
+                    #include <stdint.h>
+                    int taiGetModuleExportFunc(const char *,
+                        uint32_t, uint32_t, uintptr_t *);
                     #endif
                 """,
                 "psp2/sysmodule.h": r"""
                     #ifndef TEST_PSP2_SYSMODULE_H
                     #define TEST_PSP2_SYSMODULE_H
-                    #include <stddef.h>
-                    #ifndef TEST_SCE_SIZE_DEFINED
-                    #define TEST_SCE_SIZE_DEFINED
-                    typedef size_t SceSize;
-                    #endif
                     typedef enum SceSysmoduleInternalModuleId {
-                        SCE_SYSMODULE_INTERNAL_PAF = 0x80000008,
                         SCE_SYSMODULE_INTERNAL_PROMOTER_UTIL = 0x80000024
                     } SceSysmoduleInternalModuleId;
-                    typedef struct SceSysmoduleOpt {
-                        int flags;
-                        int *result;
-                        int unused[2];
-                    } SceSysmoduleOpt;
+                    int sceSysmoduleIsLoadedInternal(
+                        SceSysmoduleInternalModuleId);
                     int sceSysmoduleLoadModuleInternal(
                         SceSysmoduleInternalModuleId);
-                    int sceSysmoduleUnloadModuleInternal(
-                        SceSysmoduleInternalModuleId);
-                    int sceSysmoduleLoadModuleInternalWithArg(
-                        SceSysmoduleInternalModuleId, SceSize,
-                        void *, const SceSysmoduleOpt *);
-                    int sceSysmoduleUnloadModuleInternalWithArg(
-                        SceSysmoduleInternalModuleId, SceSize,
-                        void *, const SceSysmoduleOpt *);
                     #endif
                 """,
             },
@@ -564,7 +627,7 @@ class PromoteTests(unittest.TestCase):
         self.assertIn('{.name = "promote"', command_source)
         self.assertIn("Only directory paths are supported", command_source)
         self.assertIn("src/promote.c", cmake_source)
-        self.assertIn("ScePromoterUtil_stub", cmake_source)
+        self.assertNotIn("ScePromoterUtil_stub", cmake_source)
         self.assertIn("| `promote`", readme)
 
 

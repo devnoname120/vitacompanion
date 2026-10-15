@@ -131,7 +131,6 @@ target_link_libraries(vitacompanion
   SceNet_stub_weak
   SceNetCtl_stub_weak
   SceSysmodule_stub
-  ScePromoterUtil_stub
   SceKernelThreadMgr_stub_weak
   SceIofilemgr_stub_weak
   SceRtc_stub_weak

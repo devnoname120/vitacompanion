@@ -5,12 +5,12 @@
 
 #include <psp2/io/fcntl.h>
 #include <psp2/io/stat.h>
-#include <psp2/promoterutil.h>
 #include <psp2/sysmodule.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <taihen.h>
 
 #define PROMOTE_PATH_CAPACITY 1024
 #define PROMOTE_SFO_MAX_SIZE (1024 * 1024)
@@ -26,6 +26,15 @@
 #define HEAD_INFO_DIGEST_OFFSET 0xD4
 #define HEAD_TOTAL_LENGTH_OFFSET 0xE8
 #define HEAD_DIGEST_SIZE 16
+#define PROMOTER_NOT_LOADED 0x805A1001u
+#define PROMOTER_LIBRARY_NID 0x31F237B6
+
+static struct {
+    int (*initialize)(void);
+    int (*get_state)(int *);
+    int (*promote)(const char *, int);
+    int initialized;
+} promoter;
 
 static uint16_t read_le16(const uint8_t *data)
 {
@@ -431,45 +440,82 @@ static int prepare_package_head(const char *path)
         head, sizeof(head));
 }
 
-static int load_paf(void)
+static int bind_promoter(void)
 {
-    static uint32_t arguments[] = {
-        0x180000, UINT32_MAX, UINT32_MAX, 1, UINT32_MAX, UINT32_MAX
+    /* Module name, library NID and these exports match retail 3.60-3.74. */
+    static const uint32_t nids[] = {
+        0x93451536, /* scePromoterUtilityInit */
+        0xABEC74D2, /* scePromoterUtilityGetState */
+        0x86641BC6  /* scePromoterUtilityPromotePkgWithRif */
     };
-    int module_result = -1;
-    SceSysmoduleOpt option;
+    uintptr_t addresses[3] = {0};
+    size_t index;
+    int result;
 
-    memset(&option, 0, sizeof(option));
-    option.flags = sizeof(option);
-    option.result = &module_result;
-    option.unused[0] = -1;
-    option.unused[1] = -1;
-    return sceSysmoduleLoadModuleInternalWithArg(
-        SCE_SYSMODULE_INTERNAL_PAF, sizeof(arguments), arguments, &option);
+    if (promoter.initialize)
+        return 0;
+
+    result = sceSysmoduleIsLoadedInternal(
+        SCE_SYSMODULE_INTERNAL_PROMOTER_UTIL);
+    if ((uint32_t)result == PROMOTER_NOT_LOADED)
+        result = sceSysmoduleLoadModuleInternal(
+            SCE_SYSMODULE_INTERNAL_PROMOTER_UTIL);
+    if (result < 0)
+        return result;
+
+    for (index = 0; index < sizeof(nids) / sizeof(nids[0]); ++index)
+    {
+        result = taiGetModuleExportFunc("ScePromoterUtil",
+            PROMOTER_LIBRARY_NID, nids[index], &addresses[index]);
+        if (result < 0)
+            return result;
+        if (addresses[index] == 0)
+            return VITACOMPANION_PROMOTE_ERROR_API_UNAVAILABLE;
+    }
+
+    /* Publish only a complete binding; failed lookups can be retried. */
+    promoter.initialize = (int (*)(void))addresses[0];
+    promoter.get_state = (int (*)(int *))addresses[1];
+    promoter.promote = (int (*)(const char *, int))addresses[2];
+    return 0;
 }
 
-static int unload_paf(void)
+static int prepare_promoter(void)
 {
-    SceSysmoduleOpt option;
+    int state = -1;
+    int result = bind_promoter();
 
-    memset(&option, 0, sizeof(option));
-    return sceSysmoduleUnloadModuleInternalWithArg(
-        SCE_SYSMODULE_INTERNAL_PAF, 0, NULL, &option);
-}
+    if (result < 0)
+        return result;
 
-static void retain_first_error(int *result, int cleanup_result)
-{
-    if (*result >= 0 && cleanup_result < 0)
-        *result = cleanup_result;
+    result = promoter.get_state(&state);
+    if (result < 0)
+        return result;
+    if (state != 0)
+        return VITACOMPANION_PROMOTE_ERROR_BUSY;
+
+    if (!promoter.initialized)
+    {
+        result = promoter.initialize();
+        if (result < 0)
+            return result;
+        promoter.initialized = 1;
+
+        state = -1;
+        result = promoter.get_state(&state);
+        if (result < 0)
+            return result;
+        if (state != 0)
+            return VITACOMPANION_PROMOTE_ERROR_BUSY;
+    }
+
+    return 0;
 }
 
 int promote_directory(const char *path)
 {
     SceIoStat stat;
     int result;
-    int paf_loaded = 0;
-    int promoter_loaded = 0;
-    int promoter_initialized = 0;
 
     if (!path || path[0] == '\0')
         return VITACOMPANION_PROMOTE_ERROR_NOT_DIRECTORY;
@@ -485,31 +531,11 @@ int promote_directory(const char *path)
     if (result < 0)
         return result;
 
-    result = load_paf();
+    result = prepare_promoter();
     if (result < 0)
         return result;
-    paf_loaded = 1;
 
-    result = sceSysmoduleLoadModuleInternal(
-        SCE_SYSMODULE_INTERNAL_PROMOTER_UTIL);
-    if (result < 0)
-        goto cleanup;
-    promoter_loaded = 1;
-
-    result = scePromoterUtilityInit();
-    if (result < 0)
-        goto cleanup;
-    promoter_initialized = 1;
-
-    result = scePromoterUtilityPromotePkgWithRif(path, 1);
-
-cleanup:
-    if (promoter_initialized)
-        retain_first_error(&result, scePromoterUtilityExit());
-    if (promoter_loaded)
-        retain_first_error(&result, sceSysmoduleUnloadModuleInternal(
-            SCE_SYSMODULE_INTERNAL_PROMOTER_UTIL));
-    if (paf_loaded)
-        retain_first_error(&result, unload_paf());
-    return result;
+    /* Shell owns PAF and the shared PromoterUtil client. Keep the module
+     * resident and do not unregister that client with Init/Exit per command. */
+    return promoter.promote(path, 1);
 }

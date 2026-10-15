@@ -186,6 +186,12 @@ void cmd_promote(char **arg_list, size_t arg_count, char *res_msg) {
     case VITACOMPANION_PROMOTE_ERROR_INCOMPLETE_IO:
       strcpy(res_msg, "Error: Could not completely read or write promotion metadata.\n");
       break;
+    case VITACOMPANION_PROMOTE_ERROR_API_UNAVAILABLE:
+      strcpy(res_msg, "Error: Promotion API is unavailable.\n");
+      break;
+    case VITACOMPANION_PROMOTE_ERROR_BUSY:
+      strcpy(res_msg, "Error: Promotion service is busy.\n");
+      break;
     default:
       snprintf(res_msg, CMD_RESPONSE_MAX,
         "Error: Could not promote directory (0x%08X).\n",
