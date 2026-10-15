@@ -2,7 +2,7 @@ vitacompanion:
   attributes: 0
   version:
     major: 1
-    minor: 7
+    minor: 8
   main:
     start: module_start
     stop: module_stop

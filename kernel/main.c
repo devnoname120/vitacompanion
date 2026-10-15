@@ -2,6 +2,7 @@
 #include <vitacompanion_kernel.h>
 
 #include "touch_patch.h"
+#include "reboot.h"
 
 #include <psp2kern/ctrl.h>
 #include <psp2kern/kernel/modulemgr.h>
@@ -454,6 +455,16 @@ int vitaCompanionKernelReset(void)
     clear_state();
     state_unlock();
     return 0;
+}
+
+int vitaCompanionKernelRequestReboot(void)
+{
+    return vitacompanion_reboot_request_power_event();
+}
+
+int vitaCompanionKernelForceReboot(void)
+{
+    return vitacompanion_reboot_force_syscon();
 }
 
 int module_start(SceSize argc, const void *args)

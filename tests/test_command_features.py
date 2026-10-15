@@ -221,15 +221,17 @@ class CommandFeatureTests(unittest.TestCase):
             ),
         )
 
-    def test_reboot_prefers_shell_shutdown_with_forced_fallback(self):
+    def test_reboot_uses_kernel_escalation_watchdogs(self):
         command_source = (ROOT / "src" / "cmd_definitions.c").read_text()
         reboot_start = command_source.index("void cmd_reboot")
         reboot_end = command_source.index("void cmd_screen")
         reboot_handler = command_source[reboot_start:reboot_end]
+        reboot_source = (ROOT / "src" / "reboot.c").read_text()
         cmake_source = (ROOT / "CMakeLists.txt").read_text()
 
         self.assertIn("reboot_request();", reboot_handler)
-        self.assertNotIn("scePowerRequestColdReset", reboot_handler)
+        self.assertNotIn("scePowerRequestColdReset", reboot_source)
+        self.assertNotIn("<psp2/power.h>", reboot_source)
         self.assertIn("src/reboot.c", cmake_source)
         self.assertIn("taihen_stub", cmake_source)
 
@@ -243,7 +245,7 @@ class CommandFeatureTests(unittest.TestCase):
 
             #define SHELL_UTIL_LIBRARY_NID 0xD2B1C8AE
             #define SHELL_REQUEST_COLD_RESET_NID 0x636544FB
-            #define WATCHDOG_DELAY_US (5 * 1000 * 1000)
+            #define WATCHDOG_DELAY_US (3 * 1000 * 1000)
 
             static SceKernelThreadEntry watchdog_entry;
             static int call_index;
@@ -251,14 +253,19 @@ class CommandFeatureTests(unittest.TestCase):
             static int start_order;
             static int resolve_order;
             static int shell_order;
-            static int forced_order;
+            static int delay_order[2];
+            static int power_event_order;
+            static int syscon_order;
+            static int exit_order;
             static int create_result;
             static int start_result;
             static int resolve_result;
             static int shell_result;
-            static int forced_result;
+            static int power_event_result;
+            static int syscon_result;
             static int delete_count;
-            static int delay_us;
+            static int delay_count;
+            static unsigned int delay_us[2];
             static int exit_delete_count;
             static int shell_argument;
 
@@ -277,14 +284,21 @@ class CommandFeatureTests(unittest.TestCase):
                 start_order = 0;
                 resolve_order = 0;
                 shell_order = 0;
-                forced_order = 0;
+                delay_order[0] = 0;
+                delay_order[1] = 0;
+                power_event_order = 0;
+                syscon_order = 0;
+                exit_order = 0;
                 create_result = 7;
                 start_result = 0;
                 resolve_result = 0;
                 shell_result = 0;
-                forced_result = -77;
+                power_event_result = -66;
+                syscon_result = -77;
                 delete_count = 0;
-                delay_us = 0;
+                delay_count = 0;
+                delay_us[0] = 0;
+                delay_us[1] = 0;
                 exit_delete_count = 0;
                 shell_argument = -1;
             }
@@ -325,20 +339,30 @@ class CommandFeatureTests(unittest.TestCase):
 
             int sceKernelDelayThread(unsigned int delay)
             {
-                delay_us = (int)delay;
+                if (delay_count >= 2)
+                    return -1;
+                delay_order[delay_count] = ++call_index;
+                delay_us[delay_count++] = delay;
                 return 0;
             }
 
             int sceKernelExitDeleteThread(int status)
             {
+                exit_order = ++call_index;
                 ++exit_delete_count;
                 return status;
             }
 
-            int scePowerRequestColdReset(void)
+            int vitaCompanionKernelRequestReboot(void)
             {
-                forced_order = ++call_index;
-                return forced_result;
+                power_event_order = ++call_index;
+                return power_event_result;
+            }
+
+            int vitaCompanionKernelForceReboot(void)
+            {
+                syscon_order = ++call_index;
+                return syscon_result;
             }
 
             int taiGetModuleExportFunc(const char *module_name,
@@ -362,40 +386,54 @@ class CommandFeatureTests(unittest.TestCase):
                 if (reboot_request() != 0 ||
                     create_order != 1 || start_order != 2 ||
                     resolve_order != 3 || shell_order != 4 ||
-                    forced_order != 0 || shell_argument != 0 ||
+                    power_event_order != 0 || syscon_order != 0 ||
+                    shell_argument != 0 ||
                     watchdog_entry == 0)
                     return 1;
 
                 if (watchdog_entry(0, 0) != 0 ||
-                    delay_us != WATCHDOG_DELAY_US ||
-                    forced_order != 5 || exit_delete_count != 1)
+                    delay_count != 2 ||
+                    delay_us[0] != WATCHDOG_DELAY_US ||
+                    delay_us[1] != WATCHDOG_DELAY_US ||
+                    delay_order[0] != 5 || power_event_order != 6 ||
+                    delay_order[1] != 7 || syscon_order != 8 ||
+                    exit_order != 9 || exit_delete_count != 1)
                     return 2;
 
                 reset_state();
                 resolve_result = -3;
-                if (reboot_request() != forced_result ||
-                    shell_order != 0 || forced_order != 4)
+                if (reboot_request() != resolve_result ||
+                    shell_order != 0 || power_event_order != 0 ||
+                    syscon_order != 0 || watchdog_entry == 0)
                     return 3;
-
-                reset_state();
-                shell_result = -4;
-                if (reboot_request() != forced_result ||
-                    shell_order != 4 || forced_order != 5)
+                if (watchdog_entry(0, 0) != 0 ||
+                    power_event_order == 0 || syscon_order == 0)
                     return 4;
 
                 reset_state();
-                create_result = -5;
-                if (reboot_request() != forced_result ||
-                    start_order != 0 || resolve_order != 0 ||
-                    forced_order != 2)
+                shell_result = -4;
+                if (reboot_request() != shell_result ||
+                    shell_order != 4 || power_event_order != 0 ||
+                    syscon_order != 0 || watchdog_entry == 0)
                     return 5;
 
                 reset_state();
-                start_result = -6;
-                if (reboot_request() != forced_result ||
-                    delete_count != 1 || resolve_order != 0 ||
-                    forced_order != 3)
+                create_result = -5;
+                if (reboot_request() != syscon_result ||
+                    start_order != 0 || resolve_order != 2 ||
+                    shell_order != 3 || delay_order[0] != 4 ||
+                    power_event_order != 5 || delay_order[1] != 6 ||
+                    syscon_order != 7)
                     return 6;
+
+                reset_state();
+                start_result = -6;
+                if (reboot_request() != syscon_result ||
+                    delete_count != 1 || resolve_order != 3 ||
+                    shell_order != 4 || delay_order[0] != 5 ||
+                    power_event_order != 6 || delay_order[1] != 7 ||
+                    syscon_order != 8)
+                    return 7;
 
                 return 0;
             }
@@ -421,10 +459,11 @@ class CommandFeatureTests(unittest.TestCase):
                     int sceKernelExitDeleteThread(int status);
                     #endif
                 """,
-                "psp2/power.h": r"""
-                    #ifndef TEST_POWER_H
-                    #define TEST_POWER_H
-                    int scePowerRequestColdReset(void);
+                "vitacompanion_kernel.h": r"""
+                    #ifndef TEST_VITACOMPANION_KERNEL_H
+                    #define TEST_VITACOMPANION_KERNEL_H
+                    int vitaCompanionKernelRequestReboot(void);
+                    int vitaCompanionKernelForceReboot(void);
                     #endif
                 """,
                 "taihen.h": r"""
@@ -437,6 +476,224 @@ class CommandFeatureTests(unittest.TestCase):
                     #endif
                 """,
             },
+        )
+
+    def test_kernel_reboot_resolves_power_event_and_forces_syscon(self):
+        kernel_reboot_path = ROOT / "kernel" / "reboot.c"
+        kernel_header_path = ROOT / "kernel" / "reboot.h"
+        threadmgr_stub_path = (ROOT / "kernel" /
+                               "threadmgr_event_flag_list.S")
+
+        self.assertTrue(kernel_reboot_path.exists())
+        self.assertTrue(kernel_header_path.exists())
+        self.assertTrue(threadmgr_stub_path.exists())
+
+        kernel_source = kernel_reboot_path.read_text()
+        kernel_main_source = (ROOT / "kernel" / "main.c").read_text()
+        threadmgr_stub_source = threadmgr_stub_path.read_text()
+        public_header = (ROOT / "include" /
+                         "vitacompanion_kernel.h").read_text()
+        exports = (ROOT / "kernel" /
+                   "vitacompanion_kernel.yml").read_text()
+        user_exports = (ROOT / "vitacompanion.yml").read_text()
+        cmake_source = (ROOT / "CMakeLists.txt").read_text()
+
+        self.assertNotIn("PowerRequestColdReset", kernel_source)
+        self.assertNotIn("ksceGUID", kernel_source)
+        self.assertNotIn("vitacompanion_reboot_initialize",
+                         kernel_main_source)
+        self.assertIn("VITACOMPANION_KERNEL_ABI_VERSION 3", public_header)
+        self.assertIn("vitaCompanionKernelRequestReboot", public_header)
+        self.assertIn("vitaCompanionKernelForceReboot", public_header)
+        self.assertIn("vitaCompanionKernelRequestReboot", exports)
+        self.assertIn("vitaCompanionKernelForceReboot", exports)
+        self.assertIn("minor: 8", exports)
+        self.assertIn("minor: 8", user_exports)
+        self.assertIn("kernel/reboot.c", cmake_source)
+        self.assertIn("kernel/threadmgr_event_flag_list.S", cmake_source)
+        self.assertIn("SceSysconForDriver_stub", cmake_source)
+        self.assertNotIn("SceSysmemForKernel_stub", cmake_source)
+        self.assertIn(".vitalink.fstubs.SceThreadmgrForDriver",
+                      threadmgr_stub_source)
+        self.assertIn("0xE2C40624", threadmgr_stub_source)
+        self.assertIn("0x5870C73A", threadmgr_stub_source)
+
+        compile_and_run(
+            r"""
+            #include "kernel/reboot.h"
+
+            #include <psp2kern/kernel/sysmem.h>
+            #include <stdint.h>
+            #include <string.h>
+
+            #define TARGET_UID 0x105
+            #define MEMBLOCK_UID 0x201
+
+            typedef struct {
+                SceSize size;
+                SceUID event_flag_id;
+                char name[32];
+                uint32_t attributes;
+                uint32_t initial_pattern;
+                uint32_t current_pattern;
+                int waiting_threads;
+            } test_event_flag_info;
+
+            static test_event_flag_info info_storage[3];
+            static int enumerate_count;
+            static int grow_once = 1;
+            static int alloc_count;
+            static int get_base_count;
+            static int free_count;
+            static int set_count;
+            static int set_failures_remaining;
+            static SceUID last_set_uid;
+            static unsigned int last_set_bits;
+            static int syscon_count;
+            static int last_syscon_type;
+            static int last_syscon_mode;
+
+            int SceThreadmgrForDriver_5870C73A(int visibility,
+                test_event_flag_info *infos, SceSize size,
+                SceSize *actual)
+            {
+                ++enumerate_count;
+                if (visibility != 7)
+                    return -2;
+                if (infos == 0)
+                {
+                    if (size != 0 || actual != 0)
+                        return -3;
+                    return 3;
+                }
+                if (size < sizeof(info_storage) || actual == 0)
+                    return -4;
+
+                memset(info_storage, 0, sizeof(info_storage));
+                info_storage[0].event_flag_id = 0x103;
+                strcpy(info_storage[0].name, "OtherEvent");
+                info_storage[1].event_flag_id = TARGET_UID;
+                strcpy(info_storage[1].name, "ScePowerMain");
+                info_storage[2].event_flag_id = 0x107;
+                strcpy(info_storage[2].name, "AnotherEvent");
+                *actual = 3;
+                if (grow_once)
+                {
+                    grow_once = 0;
+                    return 4;
+                }
+                return 3;
+            }
+
+            SceUID ksceKernelAllocMemBlock(const char *name,
+                SceKernelMemBlockType type, SceSize size,
+                const void *option)
+            {
+                if (strcmp(name, "vitacompanion_reboot_flags") != 0 ||
+                    type != SCE_KERNEL_MEMBLOCK_TYPE_KERNEL_RW ||
+                    size != 0x1000 || option != 0)
+                    return -5;
+                ++alloc_count;
+                return MEMBLOCK_UID;
+            }
+
+            int ksceKernelGetMemBlockBase(SceUID uid, void **base)
+            {
+                if (uid != MEMBLOCK_UID)
+                    return -6;
+                ++get_base_count;
+                *base = info_storage;
+                return 0;
+            }
+
+            int ksceKernelFreeMemBlock(SceUID uid)
+            {
+                if (uid != MEMBLOCK_UID)
+                    return -7;
+                ++free_count;
+                return 0;
+            }
+
+            int ksceKernelSetEventFlag(SceUID uid, unsigned int bits)
+            {
+                ++set_count;
+                last_set_uid = uid;
+                last_set_bits = bits;
+                if (set_failures_remaining > 0)
+                {
+                    --set_failures_remaining;
+                    return -8;
+                }
+                return 0;
+            }
+
+            int ksceSysconSetPowerMode(int type, int mode)
+            {
+                ++syscon_count;
+                last_syscon_type = type;
+                last_syscon_mode = mode;
+                return -9;
+            }
+
+            int main(void)
+            {
+                if (vitacompanion_reboot_request_power_event() != 0 ||
+                    set_count != 1 || last_set_uid != TARGET_UID ||
+                    last_set_bits != 0x80 || enumerate_count != 4 ||
+                    alloc_count != 2 || get_base_count != 2 ||
+                    free_count != 2)
+                    return 1;
+
+                if (vitacompanion_reboot_request_power_event() != 0 ||
+                    set_count != 2 || enumerate_count != 4)
+                    return 2;
+
+                set_failures_remaining = 1;
+                if (vitacompanion_reboot_request_power_event() != 0 ||
+                    set_count != 4 || enumerate_count != 6 ||
+                    alloc_count != 3 || free_count != 3)
+                    return 3;
+
+                if (vitacompanion_reboot_force_syscon() != -9 ||
+                    syscon_count != 1 || last_syscon_type != 2 ||
+                    last_syscon_mode != 0)
+                    return 4;
+
+                return 0;
+            }
+            """,
+            ("kernel/reboot.c",),
+            {
+                "psp2kern/kernel/sysmem.h": r"""
+                    #ifndef TEST_KERNEL_SYSMEM_H
+                    #define TEST_KERNEL_SYSMEM_H
+                    typedef int SceUID;
+                    typedef unsigned int SceSize;
+                    typedef unsigned int SceKernelMemBlockType;
+                    #define SCE_KERNEL_MEMBLOCK_TYPE_KERNEL_RW 0x1020D006u
+                    SceUID ksceKernelAllocMemBlock(const char *name,
+                        SceKernelMemBlockType type, SceSize size,
+                        const void *option);
+                    int ksceKernelGetMemBlockBase(SceUID uid, void **base);
+                    int ksceKernelFreeMemBlock(SceUID uid);
+                    #endif
+                """,
+                "psp2kern/kernel/threadmgr/event_flags.h": r"""
+                    #ifndef TEST_KERNEL_EVENT_FLAGS_H
+                    #define TEST_KERNEL_EVENT_FLAGS_H
+                    #include <psp2kern/kernel/sysmem.h>
+                    int ksceKernelSetEventFlag(SceUID uid,
+                        unsigned int bits);
+                    #endif
+                """,
+                "psp2kern/kernel/syscon.h": r"""
+                    #ifndef TEST_KERNEL_SYSCON_H
+                    #define TEST_KERNEL_SYSCON_H
+                    int ksceSysconSetPowerMode(int type, int mode);
+                    #endif
+                """,
+            },
+            include_dirs=(".",),
         )
 
     def test_command_chains_accept_optional_trailing_semicolons(self):

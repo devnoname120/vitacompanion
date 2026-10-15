@@ -10,6 +10,7 @@ endif()
 
 
 project(vitacompanion)
+enable_language(ASM)
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 
 set(VITACOMPANION_FTP_PORT 1337 CACHE STRING "FTP control port")
@@ -52,6 +53,9 @@ add_library(ftpvita STATIC
 
 add_executable(vitacompanion_kernel
         kernel/main.c
+        kernel/reboot.c
+        kernel/reboot.h
+        kernel/threadmgr_event_flag_list.S
         kernel/touch_patch.c)
 
 target_compile_definitions(vitacompanion_kernel PRIVATE
@@ -63,6 +67,7 @@ target_link_libraries(vitacompanion_kernel
   SceCtrlForDriver_stub
   SceKernelSuspendForDriver_stub
   SceSysmemForDriver_stub
+  SceSysconForDriver_stub
   SceThreadmgrForDriver_stub
   gcc
 )
