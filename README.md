@@ -90,6 +90,26 @@ with `PORT`/`EPRT`, modern and traditional directory listings, ASCII and binary
 transfers, file metadata, and transfer restart/append commands for compatibility
 with generic FTP clients.
 
+Binary transfers use a fixed pool of four 64 KiB buffers, reserving 256 KiB
+of the plugin's 1 MiB heap when the FTP service starts. Up to four binary
+uploads or downloads can therefore run concurrently without allocating a new
+transfer buffer for each operation. If all four slots are occupied, the server
+keeps the control connection open and replies with
+`450 Transfer slot unavailable; retry later.`. Simultaneous reads of the same
+path are allowed, but an overlapping operation involving a writer is rejected
+with `450 File busy.` before the destination is opened or truncated. Transfer
+admission canonicalizes Vita path aliases without changing the path used for
+I/O: Unicode case variants, an omitted slash after the device colon, repeated
+separators, `.` components, and `..` components clamped at the device root all
+share one conflict identity. Case mapping uses a fixed one-to-one Unicode table
+rather than the host process locale.
+
+FTP has no standard mechanism for advertising this active-transfer limit.
+Configure FileZilla's simultaneous-transfer, simultaneous-upload, and per-site
+connection limits to four when using the full pool capacity. A temporary `450`
+may be retried by the client, but it does not cause FileZilla to learn a lower
+server limit.
+
 If you want curl to send the full FTP path directly instead of changing
 directories first, use the double-slash URL form:
 ```

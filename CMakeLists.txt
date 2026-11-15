@@ -57,7 +57,10 @@ add_library(ftpvita STATIC
         vendor/libftpvita/ftpvita_path.c
         vendor/libftpvita/ftpvita_path.h
         vendor/libftpvita/ftpvita_protocol.c
-        vendor/libftpvita/ftpvita_protocol.h)
+        vendor/libftpvita/ftpvita_protocol.h
+        vendor/libftpvita/transfer_pool.c
+        vendor/libftpvita/transfer_pool.h
+        vendor/libftpvita/unicode_upper_table.h)
 
 add_executable(vitacompanion_kernel
         kernel/main.c

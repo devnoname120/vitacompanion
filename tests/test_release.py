@@ -10,14 +10,14 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 class ReleaseConfigurationTests(unittest.TestCase):
-    def test_release_version_is_1_09(self):
+    def test_release_version_is_1_10(self):
         user_exports = (ROOT / "vitacompanion.yml").read_text()
         kernel_exports = (ROOT / "kernel" / "vitacompanion_kernel.yml").read_text()
 
         for exports in (user_exports, kernel_exports):
             self.assertRegex(exports, r"(?m)^\s+major: 1$")
-            self.assertRegex(exports, r"(?m)^\s+minor: 9$")
-            self.assertNotRegex(exports, r"(?m)^\s+minor: 8$")
+            self.assertRegex(exports, r"(?m)^\s+minor: 10$")
+            self.assertNotRegex(exports, r"(?m)^\s+minor: 9$")
 
     def test_logging_is_compiled_out_by_default(self):
         cmake = (ROOT / "CMakeLists.txt").read_text()
