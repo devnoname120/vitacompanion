@@ -16,6 +16,14 @@ include("${VITASDK}/share/vita.cmake" REQUIRED)
 set(VITACOMPANION_FTP_PORT 1337 CACHE STRING "FTP control port")
 set(VITACOMPANION_CMD_PORT 1338 CACHE STRING "Command server port")
 set(VITACOMPANION_MODULE_NAME "vitacompanion" CACHE STRING "Vita module name")
+option(VITACOMPANION_ENABLE_LOGGING
+  "Compile VitaCompanion and FTP logging support" OFF)
+
+if(VITACOMPANION_ENABLE_LOGGING)
+  set(VITACOMPANION_LOGGING_VALUE 1)
+else()
+  set(VITACOMPANION_LOGGING_VALUE 0)
+endif()
 
 if(NOT VITACOMPANION_FTP_PORT MATCHES "^[0-9]+$" OR
    VITACOMPANION_FTP_PORT LESS 1 OR VITACOMPANION_FTP_PORT GREATER 65535)
@@ -86,6 +94,8 @@ vita_create_stubs(vitacompanion_kernel_stubs vitacompanion_kernel
 add_executable(vitacompanion
         src/main.c
         src/main.h
+        src/heap.c
+        src/heap.h
         src/log.c
         src/log.h
         src/cmd.c
@@ -114,20 +124,22 @@ add_executable(vitacompanion
 
 target_compile_definitions(ftpvita PRIVATE
   FTP_PORT=${VITACOMPANION_FTP_PORT}
+  FTPVITA_ENABLE_LOGGING=${VITACOMPANION_LOGGING_VALUE}
 )
 target_compile_definitions(vitacompanion PRIVATE
   CMD_PORT=${VITACOMPANION_CMD_PORT}
+  ENABLE_LOGGING=${VITACOMPANION_LOGGING_VALUE}
 )
 
 add_dependencies(vitacompanion vitacompanion_kernel_stubs)
 
 target_link_libraries(vitacompanion
   taihen_stub
-  taipool
   ftpvita
   k
   gcc
   SceLibKernel_stub_weak
+  SceSysmem_stub
   SceNet_stub_weak
   SceNetCtl_stub_weak
   SceSysmodule_stub

@@ -46,6 +46,35 @@ because the user module imports its input API; the user module does not load
 the kernel module itself. Reboot after replacing either module so older copies
 are not left resident in memory.
 
+# Memory allocation
+
+The user plugin provides its own 1 MiB C heap because it is an injected
+`-nostdlib` module. At startup it allocates a cached
+`SCE_KERNEL_MEMBLOCK_TYPE_USER_RWDATA` block in the host process, obtains its
+mapped base, and creates a SceLibKernel mspace over that block. `malloc`,
+`calloc`, `realloc`, and `free` use that mspace. Module shutdown destroys the
+mspace before freeing the memblock.
+
+This memory is charged to the host process's normal Sysmem budget.
+VitaCompanion does not reserve a dormant thread stack or create a separate
+memory domain.
+
+# Build configuration
+
+Production builds should use `CMAKE_BUILD_TYPE=Release` and leave
+`VITACOMPANION_ENABLE_LOGGING` set to its default value, `OFF`. With logging
+disabled, VitaCompanion and the embedded FTP server compile out their logging
+calls and format strings rather than merely leaving callbacks unset.
+
+For example:
+
+```sh
+cmake -S . -B build/release \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DVITACOMPANION_ENABLE_LOGGING=OFF
+cmake --build build/release
+```
+
 # Usage
 
 ## FTP server

@@ -43,6 +43,10 @@
 #define ASCII_INPUT_SIZE 4096
 #define ASCII_OUTPUT_SIZE (ASCII_INPUT_SIZE * 2 + 2)
 
+#ifndef FTPVITA_ENABLE_LOGGING
+#define FTPVITA_ENABLE_LOGGING 1
+#endif
+
 #define FTP_DEFAULT_PATH   "/"
 
 #define MAX_DEVICES 16
@@ -88,15 +92,9 @@ static SceUID client_list_mtx = -1;
 static int netctl_init = -1;
 static int net_init = -1;
 
+#if FTPVITA_ENABLE_LOGGING == 1
 static void (*info_log_cb)(const char *) = NULL;
 static void (*debug_log_cb)(const char *) = NULL;
-
-/* taipool's stdlib-compatible free() does not accept NULL. */
-static void free_allocated(void *ptr)
-{
-	if (ptr)
-		free(ptr);
-}
 
 static void log_func(ftpvita_log_cb_t log_cb, const char *s, ...)
 {
@@ -112,6 +110,10 @@ static void log_func(ftpvita_log_cb_t log_cb, const char *s, ...)
 
 #define INFO(...) log_func(info_log_cb, __VA_ARGS__)
 #define DEBUG(...) log_func(debug_log_cb, __VA_ARGS__)
+#else
+#define INFO(...) ((void)0)
+#define DEBUG(...) ((void)0)
+#endif
 
 static void socket_set_io_timeouts(int socket, int timeout_us)
 {
@@ -962,7 +964,7 @@ static void send_file(ftpvita_client_info_t *client, const char *path)
 			ascii_buffer = malloc(ASCII_OUTPUT_SIZE);
 			if (ascii_buffer == NULL) {
 				sceIoClose(fd);
-				free_allocated(buffer);
+				free(buffer);
 				client_send_ctrl_msg(client, "550 Could not allocate memory." FTPVITA_EOL);
 				return;
 			}
@@ -971,8 +973,8 @@ static void send_file(ftpvita_client_info_t *client, const char *path)
 
 		if (client_open_data_connection(client) < 0) {
 			sceIoClose(fd);
-			free_allocated(buffer);
-			free_allocated(ascii_buffer);
+			free(buffer);
+			free(ascii_buffer);
 			if (client->data_con_type != FTP_DATA_CONNECTION_NONE)
 				client_close_data_connection(client);
 			client_send_ctrl_msg(client, "425 Cannot open data connection." FTPVITA_EOL);
@@ -1017,8 +1019,8 @@ static void send_file(ftpvita_client_info_t *client, const char *path)
 		}
 
 		sceIoClose(fd);
-		free_allocated(buffer);
-		free_allocated(ascii_buffer);
+		free(buffer);
+		free(ascii_buffer);
 		client_close_data_connection(client);
 		if (transfer_ok)
 			client_send_ctrl_msg(client, "226 Transfer completed." FTPVITA_EOL);
@@ -1096,7 +1098,7 @@ static void receive_file(ftpvita_client_info_t *client, const char *path,
 			ascii_buffer = malloc(ASCII_OUTPUT_SIZE);
 			if (ascii_buffer == NULL) {
 				sceIoClose(fd);
-				free_allocated(buffer);
+				free(buffer);
 				client_send_ctrl_msg(client, "550 Could not allocate memory." FTPVITA_EOL);
 				return;
 			}
@@ -1105,8 +1107,8 @@ static void receive_file(ftpvita_client_info_t *client, const char *path,
 
 		if (client_open_data_connection(client) < 0) {
 			sceIoClose(fd);
-			free_allocated(buffer);
-			free_allocated(ascii_buffer);
+			free(buffer);
+			free(ascii_buffer);
 			if (client->data_con_type != FTP_DATA_CONNECTION_NONE)
 				client_close_data_connection(client);
 			sceIoRemove(path);
@@ -1151,8 +1153,8 @@ static void receive_file(ftpvita_client_info_t *client, const char *path,
 		}
 
 		sceIoClose(fd);
-		free_allocated(buffer);
-		free_allocated(ascii_buffer);
+		free(buffer);
+		free(ascii_buffer);
 		if (bytes_recv == 0) {
 			client_send_ctrl_msg(client, "226 Transfer completed." FTPVITA_EOL);
 		} else {
@@ -1333,7 +1335,7 @@ static void cmd_SIZE_func(ftpvita_client_info_t *client)
 		if (fd < 0 || !buffer) {
 			if (fd >= 0)
 				sceIoClose(fd);
-			free_allocated(buffer);
+			free(buffer);
 			client_send_ctrl_msg(client,
 				"451 Could not calculate ASCII transfer size." FTPVITA_EOL);
 			return;
@@ -1359,7 +1361,7 @@ static void cmd_SIZE_func(ftpvita_client_info_t *client)
 		if (pending_cr)
 			transfer_size += 2;
 		sceIoClose(fd);
-		free_allocated(buffer);
+		free(buffer);
 		if (bytes_read < 0) {
 			client_send_ctrl_msg(client,
 				"451 Could not calculate ASCII transfer size." FTPVITA_EOL);
@@ -1507,7 +1509,7 @@ static void cmd_STAT_func(ftpvita_client_info_t *client)
 		clients = number_clients;
 		sceKernelUnlockMutex(client_list_mtx, 1);
 		snprintf(response, sizeof(response),
-			"211 FTPVita ready; %d client%s connected." FTPVITA_EOL,
+			"211 VitaCompanion ready; %d client%s connected." FTPVITA_EOL,
 			clients, clients == 1 ? "" : "s");
 		client_send_ctrl_msg(client, response);
 		return;
@@ -1688,7 +1690,7 @@ static void client_list_thread_end()
 		next = it->next;
 		/* Wait until the client threads ends */
 		sceKernelWaitThreadEnd(it->thid, NULL, NULL);
-		free_allocated(it);
+		free(it);
 	}
 }
 
@@ -1799,7 +1801,7 @@ static int client_thread(SceSize args, void *argp)
 	UNUSED(args);
 	DEBUG("Client thread %i started!\n", client->num);
 
-	if (client_send_ctrl_msg(client, "220 FTPVita Server ready." FTPVITA_EOL) < 0)
+	if (client_send_ctrl_msg(client, "220 VitaCompanion Server ready." FTPVITA_EOL) < 0)
 		goto cleanup;
 
 	while (1) {
@@ -1844,7 +1846,7 @@ cleanup:
 	DEBUG("Client thread %i exiting!\n", client->num);
 
 	if (client_owns_cleanup)
-		free_allocated(client);
+		free(client);
 
 	sceKernelExitDeleteThread(0);
 	return 0;
@@ -1971,7 +1973,7 @@ static int server_thread(SceSize args, void *argp)
 					"421 Too many FTP clients." FTPVITA_EOL), 0);
 				sceKernelDeleteThread(client_thid);
 				sceNetSocketClose(client_sockfd);
-				free_allocated(client);
+				free(client);
 				continue;
 			}
 
@@ -1981,7 +1983,7 @@ static int server_thread(SceSize args, void *argp)
 				client_list_delete(client);
 				sceKernelDeleteThread(client_thid);
 				sceNetSocketClose(client_sockfd);
-				free_allocated(client);
+				free(client);
 			}
 		} else {
 			if (server_stopping) {
@@ -2145,7 +2147,7 @@ error_netctlinit:
 	}
 error_netinit:
 	if (net_memory) {
-		free_allocated(net_memory);
+		free(net_memory);
 		net_memory = NULL;
 	}
 error_netstat:
@@ -2188,7 +2190,7 @@ void ftpvita_fini()
 		if (net_init == 0)
 			sceNetTerm();
 		if (net_memory)
-			free_allocated(net_memory);
+			free(net_memory);
 
 		netctl_init = -1;
 		net_init = -1;
@@ -2235,12 +2237,20 @@ int ftpvita_del_device(const char *devname)
 
 void ftpvita_set_info_log_cb(ftpvita_log_cb_t cb)
 {
+#if FTPVITA_ENABLE_LOGGING == 1
 	info_log_cb = cb;
+#else
+	(void)cb;
+#endif
 }
 
 void ftpvita_set_debug_log_cb(ftpvita_log_cb_t cb)
 {
+#if FTPVITA_ENABLE_LOGGING == 1
 	debug_log_cb = cb;
+#else
+	(void)cb;
+#endif
 }
 
 void ftpvita_set_file_buf_size(unsigned int size)

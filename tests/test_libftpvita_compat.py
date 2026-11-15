@@ -592,7 +592,7 @@ class LibftpvitaCompatTests(unittest.TestCase):
         self.assertIn("mode |= SCE_O_TRUNC;", receive)
         self.assertIn("sceIoRemove(path);", receive)
 
-    def test_client_allocation_is_not_folded_into_taipool_calloc(self):
+    def test_client_allocation_initializes_fields_explicitly(self):
         source = (VENDOR / "ftpvita.c").read_text()
         server_start = source.index("static int server_thread")
         server_end = source.index("int ftpvita_init", server_start)
@@ -613,7 +613,6 @@ class LibftpvitaCompatTests(unittest.TestCase):
         self.assertIn('client->recv_cmd_args = "";', server)
         self.assertIn("client->rename_path[0] = '\\0';", server)
         self.assertIn("sceKernelStartThread(client_thid", server)
-        self.assertIn('"220 FTPVita Server ready."', source)
 
         rest_start = source.index("static void cmd_REST_func")
         rest_end = source.index("static void cmd_FEAT_func", rest_start)
@@ -621,19 +620,21 @@ class LibftpvitaCompatTests(unittest.TestCase):
         self.assertIn("ftpvita_parse_restart_offset", rest_handler)
         self.assertNotIn("sscanf", rest_handler)
 
-    def test_taipool_cleanup_never_frees_a_null_pointer(self):
-        ftp_source = (VENDOR / "ftpvita.c").read_text()
-        main_source = (ROOT / "src" / "main.c").read_text()
+    def test_ftp_protocol_identifies_as_vitacompanion(self):
+        source = (VENDOR / "ftpvita.c").read_text()
 
-        safe_free_start = ftp_source.index("static void free_allocated")
-        safe_free_end = ftp_source.index("static void log_func", safe_free_start)
-        safe_free = ftp_source[safe_free_start:safe_free_end]
-        self.assertIn("if (ptr)", safe_free)
-
-        without_safe_free = ftp_source[:safe_free_start] + ftp_source[safe_free_end:]
-        self.assertIsNone(re.search(r"(?m)^[ \t]*free\(", without_safe_free))
-        self.assertIn("result = taipool_init", main_source)
-        self.assertIn("if (result < 0)", main_source)
+        self.assertIn('"220 VitaCompanion Server ready."', source)
+        self.assertIn(
+            '"211 VitaCompanion ready; %d client%s connected."',
+            source,
+        )
+        self.assertNotIn('"220 FTPVita Server ready."', source)
+        self.assertNotIn(
+            '"211 FTPVita ready; %d client%s connected."',
+            source,
+        )
+        self.assertIn('"FTPVita_server_sock"', source)
+        self.assertIn('"FTPVita_server_thread"', source)
 
     def test_public_extension_hooks_reject_null_inputs(self):
         source = (VENDOR / "ftpvita.c").read_text()

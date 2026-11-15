@@ -66,8 +66,8 @@ static void do_net_connected()
     LOG("do_net_connected\n");
 
 #if ENABLE_LOGGING == 1
-    ftpvita_set_info_log_cb(LOG);
-    ftpvita_set_debug_log_cb(LOG);
+    ftpvita_set_info_log_cb(LOG_CALLBACK);
+    ftpvita_set_debug_log_cb(LOG_CALLBACK);
 #endif
 
     ftpvita_set_file_buf_size(512 * 1024);

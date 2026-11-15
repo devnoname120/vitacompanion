@@ -1,16 +1,18 @@
+#include "main.h"
+
 #include <psp2/kernel/modulemgr.h>
 #include <psp2/kernel/threadmgr.h>
+#if ENABLE_LOGGING == 1
+#include <psp2/io/fcntl.h>
+#endif
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-#define TAIPOOL_AS_STDLIB
 #include "cmd.h"
+#include "heap.h"
 #include "input.h"
-#include "main.h"
 #include "net.h"
 #include "nosleep.h"
-
-#include <taipool.h>
 
 extern SceUID net_thid;
 extern volatile int all_is_up;
@@ -26,15 +28,14 @@ int __unused module_start(SceSize argc, const void* args)
     (void)argc;
     (void)args;
 
-    result = input_start();
+    result = heap_init(1 * 1024 * 1024);
     if (result < 0)
         return result;
 
-    // Required for ftpvita
-    result = taipool_init(1 * 1024 * 1024);
+    result = input_start();
     if (result < 0)
     {
-        input_end();
+        heap_term();
         return result;
     }
 
@@ -47,7 +48,8 @@ int __unused module_start(SceSize argc, const void* args)
     if (result < 0)
     {
         run = 0;
-        taipool_term();
+        input_end();
+        heap_term();
         return result;
     }
     result = net_start();
@@ -55,8 +57,8 @@ int __unused module_start(SceSize argc, const void* args)
     {
         run = 0;
         nosleep_end();
-        taipool_term();
         input_end();
+        heap_term();
         return result;
     }
 
@@ -74,8 +76,7 @@ int __unused module_stop(SceSize argc, const void* args)
     net_end();
     nosleep_end();
     input_end();
-
-    taipool_term();
+    heap_term();
 
     return SCE_KERNEL_STOP_SUCCESS;
 }
