@@ -11,12 +11,11 @@
 #include "cmd.h"
 #include "heap.h"
 #include "input.h"
+#include "log.h"
 #include "net.h"
 #include "nosleep.h"
 
 extern SceUID net_thid;
-extern volatile int all_is_up;
-extern volatile int net_connected;
 
 volatile int run;
 
@@ -29,12 +28,14 @@ int __unused module_start(SceSize argc, const void* args)
     (void)args;
 
     result = heap_init(1 * 1024 * 1024);
+    LOG("VitaCompanion startup, heap: 0x%08X\n", result);
     if (result < 0)
         return result;
 
     result = input_start();
     if (result < 0)
     {
+        LOG("input_start failed: 0x%08X\n", result);
         heap_term();
         return result;
     }
@@ -47,6 +48,7 @@ int __unused module_start(SceSize argc, const void* args)
     result = nosleep_start();
     if (result < 0)
     {
+        LOG("nosleep_start failed: 0x%08X\n", result);
         run = 0;
         input_end();
         heap_term();
@@ -55,6 +57,7 @@ int __unused module_start(SceSize argc, const void* args)
     result = net_start();
     if (result < 0)
     {
+        LOG("net_start failed: 0x%08X\n", result);
         run = 0;
         nosleep_end();
         input_end();
@@ -62,6 +65,7 @@ int __unused module_start(SceSize argc, const void* args)
         return result;
     }
 
+    LOG("VitaCompanion worker started\n");
     return SCE_KERNEL_START_SUCCESS;
 }
 

@@ -15,6 +15,8 @@ typedef void (*ftpvita_log_cb_t)(const char *);
 
 /* Returns PSVita's IP and FTP port. 0 on success */
 int ftpvita_init(char *vita_ip, unsigned short int *vita_port);
+/* Starts FTP on a network stack owned by the caller's process. */
+int ftpvita_init_existing_network(char *vita_ip, unsigned short int *vita_port);
 void ftpvita_fini();
 int ftpvita_is_initialized();
 int ftpvita_add_device(const char *devname);

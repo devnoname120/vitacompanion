@@ -22,7 +22,6 @@
 #define CMD_START_TIMEOUT_MS 5000
 
 extern volatile int run;
-extern volatile int all_is_up;
 extern volatile int net_connected;
 
 static SceUID loader_thid = -1;

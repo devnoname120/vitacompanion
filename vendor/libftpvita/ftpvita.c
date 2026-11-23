@@ -2078,7 +2078,8 @@ exit:
 	return 0;
 }
 
-int ftpvita_init(char *vita_ip, unsigned short int *vita_port)
+static int ftpvita_init_internal(char *vita_ip, unsigned short int *vita_port,
+	int existing_network)
 {
 	int ret;
 	int i;
@@ -2089,6 +2090,9 @@ int ftpvita_init(char *vita_ip, unsigned short int *vita_port)
 	if (ftp_initialized || !vita_ip || !vita_port) {
 		return -1;
 	}
+
+	if (existing_network)
+		goto get_ip_address;
 
 	/* Init Net */
 	ret = sceNetShowNetstat();
@@ -2121,6 +2125,7 @@ int ftpvita_init(char *vita_ip, unsigned short int *vita_port)
 	if (netctl_init < 0 && netctl_init != NET_CTL_ERROR_NOT_TERMINATED)
 		goto error_netctlinit;
 
+get_ip_address:
 	/* Get IP address */
 	ret = sceNetCtlInetGetInfo(SCE_NETCTL_INFO_GET_IP_ADDRESS, &info);
 	DEBUG("sceNetCtlInetGetInfo(): 0x%08X\n", ret);
@@ -2223,6 +2228,16 @@ error_netinit:
 	}
 error_netstat:
 	return ret;
+}
+
+int ftpvita_init(char *vita_ip, unsigned short int *vita_port)
+{
+	return ftpvita_init_internal(vita_ip, vita_port, 0);
+}
+
+int ftpvita_init_existing_network(char *vita_ip, unsigned short int *vita_port)
+{
+	return ftpvita_init_internal(vita_ip, vita_port, 1);
 }
 
 void ftpvita_fini()

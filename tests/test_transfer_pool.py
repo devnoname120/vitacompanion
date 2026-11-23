@@ -580,7 +580,7 @@ class ProductionTransferPoolIntegrationTests(unittest.TestCase):
 
     def test_pool_lifecycle_is_inside_ftp_lifecycle(self):
         ftp = (ROOT / "vendor" / "libftpvita" / "ftpvita.c").read_text()
-        init_match = re.search(r"int ftpvita_init\(.*?^\}", ftp, re.DOTALL | re.MULTILINE)
+        init_match = re.search(r"int ftpvita_init_internal\(.*?^\}", ftp, re.DOTALL | re.MULTILINE)
         fini_match = re.search(r"void ftpvita_fini\(.*?^\}", ftp, re.DOTALL | re.MULTILINE)
         clients_match = re.search(
             r"static void client_list_thread_end\(\).*?^\}",
